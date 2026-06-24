@@ -1,0 +1,5 @@
+{
+  "nimbus": "./example-site",
+  "shop": "../my-shop",
+  "blog": "/absolute/path/to/your/site"
+}

@@ -1,0 +1,49 @@
+{
+  "name": "dheep-ai-visual-editor",
+  "version": "1.0.0",
+  "description": "Edit any website visually from the browser — click an element, chat with AI in a sidebar, and Claude Code edits your local source files in real time. No API key required.",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "keywords": [
+    "ai-visual-editor",
+    "visual-editor",
+    "website-builder",
+    "vibe-coding",
+    "ai-code-editor",
+    "claude",
+    "claude-code",
+    "anthropic",
+    "browser-overlay",
+    "click-to-edit",
+    "hot-reload",
+    "live-edit",
+    "no-code",
+    "low-code",
+    "developer-tools",
+    "frontend"
+  ],
+  "homepage": "https://github.com/dhabita/dheep-ai-visual-editor#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dhabita/dheep-ai-visual-editor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dhabita/dheep-ai-visual-editor/issues"
+  },
+  "author": "Bisri Mustofa (@dhabita)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "chokidar": "^4.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  }
+}

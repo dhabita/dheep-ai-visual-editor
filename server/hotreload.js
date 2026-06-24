@@ -1,0 +1,68 @@
+import { WebSocketServer } from 'ws';
+import chokidar from 'chokidar';
+
+const WATCH_EXT = /\.(html?|css|js|jsx|ts|tsx|vue|svelte)$/i;
+
+/**
+ * Start one WebSocket server that serves every project, plus a chokidar watcher
+ * per project root. Each browser connects with ?project=<id>; a file change in
+ * a project only reloads the browsers tied to that project.
+ *
+ * @param {number} port
+ * @param {Map<string,{id:string,root:string}>} projects
+ */
+export function startHotReload(port, projects) {
+  const wss = new WebSocketServer({ port });
+
+  // Tag each socket with the project id from its connection URL.
+  wss.on('connection', (ws, req) => {
+    let projectId = null;
+    try {
+      const url = new URL(req.url, 'http://localhost');
+      projectId = url.searchParams.get('project');
+    } catch { /* ignore */ }
+    ws.aveProject = projectId;
+  });
+
+  function broadcast(projectId, payload) {
+    const msg = JSON.stringify(payload);
+    for (const client of wss.clients) {
+      if (client.readyState !== 1 /* OPEN */) continue;
+      // Send to clients of this project (or untagged clients, for single-project setups).
+      if (!client.aveProject || client.aveProject === projectId) client.send(msg);
+    }
+  }
+
+  const watchers = [];
+  for (const { id, root } of projects.values()) {
+    const watcher = chokidar.watch(root, {
+      ignored: (p) => /node_modules|\.git|dist|build|\.next/.test(p),
+      ignoreInitial: true,
+      persistent: true,
+    });
+
+    let debounce = null;
+    const onChange = (filePath) => {
+      if (!WATCH_EXT.test(filePath)) return;
+      clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        console.log(`[hotreload] (${id}) change: ${filePath} → reload`);
+        broadcast(id, { type: 'reload', project: id, file: filePath });
+      }, 120);
+    };
+
+    watcher.on('change', onChange).on('add', onChange);
+    watchers.push(watcher);
+    console.log(`[hotreload] watching [${id}] ${root}`);
+  }
+
+  console.log(`[hotreload] WebSocket on ws://localhost:${port} (${projects.size} project(s))`);
+
+  return {
+    notify: (projectId, file) => broadcast(projectId, { type: 'reload', project: projectId, file }),
+    close: () => {
+      watchers.forEach((w) => w.close());
+      wss.close();
+    },
+  };
+}

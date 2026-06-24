@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pricing — Nimbus</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .page-hero { text-align: center; padding: 80px 24px 56px; }
+    .page-hero h1 { font-size: 44px; letter-spacing: -1.2px; margin: 0 0 16px; }
+    .page-hero p { font-size: 19px; color: var(--muted); max-width: 480px; margin: 0 auto; }
+
+    .pricing-section { padding: 0 24px 72px; max-width: 1040px; margin: 0 auto; }
+
+    .toggle-wrap { display: flex; justify-content: center; gap: 0; margin-bottom: 48px; }
+    .toggle-btn {
+      padding: 9px 24px;
+      border: 1px solid var(--line);
+      background: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .toggle-btn:first-child { border-radius: 8px 0 0 8px; }
+    .toggle-btn:last-child { border-radius: 0 8px 8px 0; margin-left: -1px; }
+    .toggle-btn.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+
+    .price-grid-full { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .plan {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 32px 28px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+    }
+    .plan-featured { border-color: var(--brand); box-shadow: 0 16px 40px rgba(99, 102, 241, 0.18); position: relative; }
+    .plan-badge {
+      position: absolute;
+      top: -14px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--brand);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 14px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .plan-name { font-size: 14px; color: var(--muted); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+    .plan-price { font-size: 48px; font-weight: 800; margin: 0 0 4px; letter-spacing: -1px; }
+    .plan-price span { font-size: 16px; font-weight: 500; color: var(--muted); }
+    .plan-desc { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+    .plan-list { list-style: none; padding: 0; margin: 0 0 28px; text-align: left; flex: 1; }
+    .plan-list li {
+      padding: 9px 0;
+      border-top: 1px solid var(--line);
+      font-size: 14.5px;
+      color: var(--muted);
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .plan-list li::before { content: "✓"; color: var(--brand); font-weight: 700; flex-shrink: 0; }
+    .plan-list li.no::before { content: "—"; color: var(--line); }
+    .plan-list li.no { color: #c4cdd8; }
+
+    .compare { padding: 72px 24px; max-width: 1040px; margin: 0 auto; }
+    .compare h2 { font-size: 28px; letter-spacing: -0.5px; margin: 0 0 32px; }
+    .compare-table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+    .compare-table th {
+      text-align: left;
+      padding: 12px 16px;
+      border-bottom: 2px solid var(--line);
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+    .compare-table th:first-child { width: 40%; }
+    .compare-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+    }
+    .compare-table td:first-child { color: var(--ink); font-weight: 500; }
+    .compare-table tr:last-child td { border-bottom: none; }
+    .check { color: var(--brand); font-weight: 700; }
+    .dash { color: var(--line); }
+
+    .faq-mini { padding: 72px 24px; max-width: 720px; margin: 0 auto; }
+    .faq-mini h2 { font-size: 28px; letter-spacing: -0.5px; margin: 0 0 32px; }
+    .faq-item { border-top: 1px solid var(--line); padding: 20px 0; }
+    .faq-item:last-child { border-bottom: 1px solid var(--line); }
+    .faq-item h3 { font-size: 16px; margin: 0 0 8px; }
+    .faq-item p { margin: 0; color: var(--muted); font-size: 14.5px; line-height: 1.7; }
+
+    @media (max-width: 760px) {
+      .price-grid-full { grid-template-columns: 1fr; }
+      .page-hero h1 { font-size: 32px; }
+      .compare-table th:nth-child(n+3),
+      .compare-table td:nth-child(n+3) { display: none; }
+    }
+  </style>
+</head>
+<body data-file="pricing.html">
+
+  <!-- Navbar -->
+  <header class="nav">
+    <a class="nav-logo" href="index.html">◆ Nimbus</a>
+    <nav class="nav-links">
+      <a href="features.html">Features</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="faq.html">FAQ</a>
+    </nav>
+    <a href="#" class="btn btn-primary nav-cta">Get started</a>
+  </header>
+
+  <!-- Page Hero -->
+  <section class="page-hero">
+    <span class="hero-badge">Simple pricing</span>
+    <h1>Pay for what you use.<br>Nothing more.</h1>
+    <p>All plans include a 14-day free trial. No credit card required to start.</p>
+  </section>
+
+  <!-- Plans -->
+  <div class="pricing-section">
+    <div class="toggle-wrap">
+      <button class="toggle-btn active">Monthly</button>
+      <button class="toggle-btn">Yearly — save 20%</button>
+    </div>
+
+    <div class="price-grid-full">
+      <article class="plan">
+        <p class="plan-name">Hobby</p>
+        <p class="plan-price">$0<span>/mo</span></p>
+        <p class="plan-desc">Perfect for personal projects and exploring Nimbus.</p>
+        <ul class="plan-list">
+          <li>1 project</li>
+          <li>50 AI edits / month</li>
+          <li>Community support</li>
+          <li>Local hosting only</li>
+          <li class="no">Team members</li>
+          <li class="no">Priority support</li>
+          <li class="no">SSO & audit logs</li>
+        </ul>
+        <a href="#" class="btn btn-ghost">Get started free</a>
+      </article>
+
+      <article class="plan plan-featured">
+        <span class="plan-badge">Most popular</span>
+        <p class="plan-name">Pro</p>
+        <p class="plan-price">$19<span>/mo</span></p>
+        <p class="plan-desc">For professionals who ship sites fast and often.</p>
+        <ul class="plan-list">
+          <li>Unlimited projects</li>
+          <li>2 000 AI edits / month</li>
+          <li>Priority support</li>
+          <li>Cloud publishing</li>
+          <li>Up to 5 team members</li>
+          <li>Version history (90 days)</li>
+          <li class="no">SSO & audit logs</li>
+        </ul>
+        <a href="#" class="btn btn-primary">Start Pro trial</a>
+      </article>
+
+      <article class="plan">
+        <p class="plan-name">Team</p>
+        <p class="plan-price">$49<span>/mo</span></p>
+        <p class="plan-desc">For growing teams that need collaboration and control.</p>
+        <ul class="plan-list">
+          <li>Everything in Pro</li>
+          <li>Unlimited AI edits</li>
+          <li>Dedicated account manager</li>
+          <li>Unlimited team members</li>
+          <li>SSO &amp; audit logs</li>
+          <li>Version history (1 year)</li>
+          <li>Custom integrations</li>
+        </ul>
+        <a href="#" class="btn btn-ghost">Contact sales</a>
+      </article>
+    </div>
+  </div>
+
+  <!-- Comparison Table -->
+  <section class="compare">
+    <h2>Full feature comparison</h2>
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th>Hobby</th>
+          <th>Pro</th>
+          <th>Team</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Projects</td>
+          <td>1</td>
+          <td>Unlimited</td>
+          <td>Unlimited</td>
+        </tr>
+        <tr>
+          <td>AI edits / month</td>
+          <td>50</td>
+          <td>2 000</td>
+          <td>Unlimited</td>
+        </tr>
+        <tr>
+          <td>Cloud publishing</td>
+          <td><span class="dash">—</span></td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>Team members</td>
+          <td><span class="dash">—</span></td>
+          <td>Up to 5</td>
+          <td>Unlimited</td>
+        </tr>
+        <tr>
+          <td>Version history</td>
+          <td><span class="dash">—</span></td>
+          <td>90 days</td>
+          <td>1 year</td>
+        </tr>
+        <tr>
+          <td>Priority support</td>
+          <td><span class="dash">—</span></td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>SSO &amp; audit logs</td>
+          <td><span class="dash">—</span></td>
+          <td><span class="dash">—</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>Custom integrations</td>
+          <td><span class="dash">—</span></td>
+          <td><span class="dash">—</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>Dedicated account manager</td>
+          <td><span class="dash">—</span></td>
+          <td><span class="dash">—</span></td>
+          <td><span class="check">✓</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- Quick FAQ -->
+  <section class="faq-mini">
+    <h2>Common pricing questions</h2>
+    <div class="faq-item">
+      <h3>Can I upgrade or downgrade at any time?</h3>
+      <p>Yes. Plan changes take effect immediately and are prorated to your billing cycle.</p>
+    </div>
+    <div class="faq-item">
+      <h3>What counts as an AI edit?</h3>
+      <p>Each time you submit a description and Claude modifies a file, that's one edit. Undos and previews don't count.</p>
+    </div>
+    <div class="faq-item">
+      <h3>Is there a free trial on paid plans?</h3>
+      <p>All paid plans include a 14-day free trial. No credit card is required to start.</p>
+    </div>
+    <div class="faq-item">
+      <h3>Do you offer discounts for non-profits or education?</h3>
+      <p>Yes — email us at hello@nimbus.app and we'll sort you out.</p>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-band" style="margin: 0 24px 48px;">
+    <h2>Start building for free today</h2>
+    <a href="#" class="btn btn-light">Get started — no card needed</a>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>© 2026 Nimbus. Built with the AI Visual Editor.</p>
+    <nav class="footer-links">
+      <a href="#">Privacy</a>
+      <a href="#">Terms</a>
+      <a href="#">Contact</a>
+    </nav>
+  </footer>
+
+  <script src="http://localhost:3000/overlay.js?project=nimbus"></script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Visual Editor — Dashboard</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0; font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #131318; color: #e7e7ea;
+    }
+    header {
+      padding: 24px 28px; border-bottom: 1px solid #2a2a32;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    h1 { font-size: 18px; margin: 0; }
+    .pill { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: #26262e; }
+    .pill.ok { background: #14532d; color: #86efac; }
+    .pill.bad { background: #4c1d1d; color: #fca5a5; }
+    main { padding: 24px 28px; max-width: 820px; }
+    .meta { color: #9a9aa3; font-size: 13px; margin-bottom: 18px; }
+    .task {
+      border: 1px solid #2a2a32; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px;
+      background: #1a1a20;
+    }
+    .task .sel { font: 11px ui-monospace, Menlo, monospace; color: #93c5fd; }
+    .task .prompt { margin: 6px 0; font-weight: 600; }
+    .task .summary { color: #c8c8d0; }
+    .task .files { margin-top: 6px; font: 11px ui-monospace, Menlo, monospace; color: #4ade80; }
+    .task time { color: #6b6b76; font-size: 12px; }
+    .empty { color: #6b6b76; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AI Visual Editor</h1>
+    <span class="pill" id="status">checking…</span>
+  </header>
+  <main>
+    <div class="meta" id="meta"></div>
+    <div id="tasks"><p class="empty">Loading task history…</p></div>
+  </main>
+
+  <script>
+    async function load() {
+      const statusEl = document.getElementById('status');
+      const metaEl = document.getElementById('meta');
+      const tasksEl = document.getElementById('tasks');
+
+      try {
+        const s = await (await fetch('/status')).json();
+        statusEl.textContent = s.cliAvailable ? 'CLI ready' : 'claude CLI not found';
+        statusEl.className = 'pill ' + (s.cliAvailable ? 'ok' : 'bad');
+        const projList = (s.projects || [])
+          .map((p) => `<code>${esc(p.id)}</code> → ${esc(p.root)}`)
+          .join(' &nbsp;·&nbsp; ') || '<i>no projects registered</i>';
+        metaEl.innerHTML = `Model <b>${esc(s.model)}</b>`
+          + (s.cliVersion ? ` · <span style="color:#6b6b76">${esc(s.cliVersion)}</span>` : '')
+          + `<br><span style="color:#9a9aa3">Projects:</span> ${projList}`;
+      } catch {
+        statusEl.textContent = 'offline';
+        statusEl.className = 'pill bad';
+      }
+
+      try {
+        const tasks = await (await fetch('/history')).json();
+        if (!tasks.length) {
+          tasksEl.innerHTML = '<p class="empty">No tasks yet. Open your site, press Ctrl+Shift+E, click an element.</p>';
+          return;
+        }
+        tasksEl.innerHTML = tasks.map((t) => `
+          <div class="task">
+            <div class="sel">${t.project ? '[' + esc(t.project) + '] ' : ''}${esc(t.selector || t.file || '')}</div>
+            <div class="prompt">${esc(t.prompt)}</div>
+            <div class="summary">${esc(t.summary || '')}</div>
+            ${t.editedFiles && t.editedFiles.length ? `<div class="files">✎ ${t.editedFiles.map(esc).join(', ')}</div>` : ''}
+            <time>${new Date(t.time).toLocaleString()}</time>
+          </div>`).join('');
+      } catch {
+        tasksEl.innerHTML = '<p class="empty">Could not load history.</p>';
+      }
+    }
+    function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+    load();
+    setInterval(load, 4000);
+  </script>
+</body>
+</html>

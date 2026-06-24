@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FAQ — Nimbus</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .page-hero { text-align: center; padding: 80px 24px 56px; }
+    .page-hero h1 { font-size: 44px; letter-spacing: -1.2px; margin: 0 0 16px; }
+    .page-hero p { font-size: 19px; color: var(--muted); max-width: 480px; margin: 0 auto; }
+
+    .faq-wrap { max-width: 760px; margin: 0 auto; padding: 0 24px 80px; }
+
+    .faq-category { margin-bottom: 52px; }
+    .faq-category h2 {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--brand-dark);
+      font-weight: 700;
+      margin: 0 0 20px;
+    }
+
+    details {
+      border-top: 1px solid var(--line);
+    }
+    details:last-child { border-bottom: 1px solid var(--line); }
+
+    summary {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 0;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      list-style: none;
+      color: var(--ink);
+      gap: 16px;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::after {
+      content: "+";
+      font-size: 22px;
+      font-weight: 400;
+      color: var(--muted);
+      flex-shrink: 0;
+      transition: transform 0.2s ease;
+    }
+    details[open] summary::after {
+      transform: rotate(45deg);
+    }
+    details[open] summary { color: var(--brand-dark); }
+
+    .faq-body {
+      padding: 0 0 22px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.75;
+    }
+    .faq-body a { color: var(--brand-dark); text-decoration: underline; }
+    .faq-body p { margin: 0 0 12px; }
+    .faq-body p:last-child { margin: 0; }
+
+    .contact-band {
+      background: var(--soft);
+      border-radius: 20px;
+      padding: 48px 32px;
+      text-align: center;
+      margin: 0 24px 72px;
+    }
+    .contact-band h2 { font-size: 26px; margin: 0 0 10px; letter-spacing: -0.5px; }
+    .contact-band p { color: var(--muted); margin: 0 0 24px; }
+    .contact-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+    @media (max-width: 760px) {
+      .page-hero h1 { font-size: 32px; }
+    }
+  </style>
+</head>
+<body data-file="faq.html">
+
+  <!-- Navbar -->
+  <header class="nav">
+    <a class="nav-logo" href="index.html">◆ Nimbus</a>
+    <nav class="nav-links">
+      <a href="features.html">Features</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="faq.html">FAQ</a>
+    </nav>
+    <a href="#" class="btn btn-primary nav-cta">Get started</a>
+  </header>
+
+  <!-- Page Hero -->
+  <section class="page-hero">
+    <span class="hero-badge">Help center</span>
+    <h1>Frequently asked questions</h1>
+    <p>Can't find your answer? <a href="#contact" style="color:var(--brand-dark)">Reach out</a> and we'll reply within one business day.</p>
+  </section>
+
+  <!-- FAQ Sections -->
+  <div class="faq-wrap">
+
+    <div class="faq-category">
+      <h2>Getting started</h2>
+
+      <details>
+        <summary>What is Nimbus?</summary>
+        <div class="faq-body">
+          <p>Nimbus is an AI-powered visual editor that lets you update any website by clicking on elements and describing changes in plain language. Claude AI interprets your intent, edits the source files, and reloads the page instantly — no code knowledge required.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Do I need to know how to code?</summary>
+        <div class="faq-body">
+          <p>No. Nimbus is designed for everyone — designers, marketers, founders, and developers alike. You describe what you want in plain English and Nimbus handles the code. That said, developers love it too because it dramatically speeds up iteration.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>What kind of sites does Nimbus work with?</summary>
+        <div class="faq-body">
+          <p>Nimbus works with any site built on HTML, CSS, and JavaScript. This includes hand-coded sites, static site generators (Hugo, Eleventy, Astro), and simple templated setups. Complex frameworks like React or Next.js are supported with the Pro and Team plans.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>How do I get started?</summary>
+        <div class="faq-body">
+          <p>Sign up for a free account, connect your project folder, and open your site in the Nimbus browser. Hover over any element to select it, type what you want changed, and hit Enter. Your page updates in seconds.</p>
+          <p>The whole setup takes under two minutes.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="faq-category">
+      <h2>Plans & Billing</h2>
+
+      <details>
+        <summary>Is there a free plan?</summary>
+        <div class="faq-body">
+          <p>Yes. The Hobby plan is free forever and includes one project with 50 AI edits per month. It's a great way to try Nimbus without any commitment.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Can I upgrade or downgrade at any time?</summary>
+        <div class="faq-body">
+          <p>Absolutely. You can switch plans from your account settings at any time. Upgrades take effect immediately. Downgrades apply at the end of the current billing cycle, so you keep your current features until then.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>What payment methods do you accept?</summary>
+        <div class="faq-body">
+          <p>We accept all major credit and debit cards (Visa, Mastercard, Amex) via Stripe. Annual plans can also be paid by invoice — contact sales for details.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Do you offer refunds?</summary>
+        <div class="faq-body">
+          <p>We offer a full refund within 7 days of any charge if Nimbus isn't working for you. Email us at billing@nimbus.app and we'll process it the same day.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Are there discounts for non-profits or education?</summary>
+        <div class="faq-body">
+          <p>Yes. We offer 50% off on all paid plans for verified non-profit organizations and educational institutions. Email hello@nimbus.app with proof of eligibility and we'll apply the discount to your account.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="faq-category">
+      <h2>AI edits & usage</h2>
+
+      <details>
+        <summary>What counts as an AI edit?</summary>
+        <div class="faq-body">
+          <p>An AI edit is counted each time you submit a prompt and Nimbus modifies one or more files. Previewing a suggestion, undoing changes, or re-reading the page does not count toward your limit.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>What happens if I reach my edit limit?</summary>
+        <div class="faq-body">
+          <p>You'll see a notification when you're approaching your limit. Once reached, you can still view and navigate your site — you just won't be able to submit new AI edit requests until the next billing cycle or until you upgrade.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>How accurate are the AI edits?</summary>
+        <div class="faq-body">
+          <p>Very. Nimbus uses Claude, Anthropic's most capable model, which understands design intent and context rather than just keyword matching. In our testing, over 95% of edits land correctly on the first try. The undo button is always there if one doesn't.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="faq-category">
+      <h2>Privacy & Security</h2>
+
+      <details>
+        <summary>Is my source code safe?</summary>
+        <div class="faq-body">
+          <p>Yes. Your source files are stored on your machine or your preferred cloud storage. Nimbus only transmits the specific element and context needed to generate an edit — never your entire codebase.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Does Nimbus store my site's content?</summary>
+        <div class="faq-body">
+          <p>We store edit history (so you can undo and review changes) but not your full site content. Edit history is encrypted at rest and you can delete it at any time from your account settings.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Is Nimbus GDPR compliant?</summary>
+        <div class="faq-body">
+          <p>Yes. We are GDPR compliant and process all EU data within EU data centers. You can request a Data Processing Agreement (DPA) by emailing privacy@nimbus.app.</p>
+        </div>
+      </details>
+    </div>
+
+  </div>
+
+  <!-- Contact Band -->
+  <div class="contact-band" id="contact">
+    <h2>Still have questions?</h2>
+    <p>Our team is happy to help. We typically reply within a few hours.</p>
+    <div class="contact-actions">
+      <a href="#" class="btn btn-primary">Chat with support</a>
+      <a href="#" class="btn btn-ghost">Email us →</a>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>© 2026 Nimbus. Built with the AI Visual Editor.</p>
+    <nav class="footer-links">
+      <a href="#">Privacy</a>
+      <a href="#">Terms</a>
+      <a href="#">Contact</a>
+    </nav>
+  </footer>
+
+  <script src="http://localhost:3000/overlay.js?project=nimbus"></script>
+</body>
+</html>
