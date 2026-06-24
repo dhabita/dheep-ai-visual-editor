@@ -155,6 +155,10 @@
 #ave-fab:hover { transform: scale(1.07); }
 #ave-fab.hide { opacity: 0; pointer-events: none; transform: scale(0.6); }
 
+/* Push the page left so the sidebar never covers content. */
+html.ave-push-anim { transition: margin-right 0.18s ease; }
+html.ave-pushed { margin-right: min(380px, 92vw) !important; }
+
 #ave-sidebar {
   position: fixed;
   top: 0;

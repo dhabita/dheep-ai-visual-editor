@@ -65,6 +65,9 @@ function aveToggleSidebar(open) {
   if (!aveSb) return;
   aveSb.classList.toggle('open', open);
   aveFab.classList.toggle('hide', open);
+  // Push the page left instead of covering it.
+  document.documentElement.classList.add('ave-push-anim');
+  document.documentElement.classList.toggle('ave-pushed', open);
   if (open) setTimeout(() => aveSb.querySelector('.ave-sb-input')?.focus(), 180);
 }
 
