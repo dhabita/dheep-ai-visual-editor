@@ -9,7 +9,13 @@ import cors from 'cors';
 import { runTask } from './claude.js';
 import { startHotReload } from './hotreload.js';
 import { readTasks, appendTask } from './utils.js';
-import { loadProjects, resolveProject } from './projects.js';
+import {
+  loadProjects,
+  discoverProject,
+  persistProjects,
+  isAllowedRoot,
+  getWorkspaceRoots,
+} from './projects.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -30,6 +36,28 @@ app.use(express.json({ limit: '2mb' }));
 // Hot reload (one WebSocket server, one watcher per project)
 // ---------------------------------------------------------------------------
 const hot = startHotReload(WS_PORT, projects);
+
+/**
+ * Make sure a project id is registered. If unknown, try to auto-discover a
+ * matching folder under the workspace roots and register it live (watch +
+ * persist) — so new projects work with zero manual setup. Returns {id,root} or null.
+ */
+function ensureProject(id) {
+  if (!id) return null;
+  if (projects.has(id)) return projects.get(id);
+  const root = discoverProject(id);
+  if (!root) return null;
+  return registerProject(id, root);
+}
+
+function registerProject(id, root) {
+  const entry = { id, root: path.resolve(root) };
+  projects.set(id, entry);
+  hot.watch(id, entry.root);
+  persistProjects(projects);
+  console.log(`[projects] auto-registered "${id}" → ${entry.root}`);
+  return entry;
+}
 
 // ---------------------------------------------------------------------------
 // Overlay delivery — bundle highlight + popup + overlay + CSS into one file,
@@ -64,6 +92,9 @@ app.get('/overlay.js', (req, res) => {
   // ?project=<id>; if omitted and there's exactly one project, use it.
   let projectId = req.query.project;
   if (!projectId && projects.size === 1) projectId = [...projects.keys()][0];
+  // Auto-discover + register the project now, so its hot-reload watcher is live
+  // even before the first edit — zero manual setup.
+  if (projectId) ensureProject(projectId);
   try {
     res.type('application/javascript').send(buildOverlayBundle(projectId));
   } catch (err) {
@@ -85,6 +116,24 @@ app.get('/projects', (req, res) => {
   res.json([...projects.values()].map((p) => ({ id: p.id, root: p.root })));
 });
 
+// Explicit registration for projects outside the workspace roots.
+// Body: { id, root }. Root must be an existing dir inside an allowed base.
+app.post('/register', (req, res) => {
+  const { id, root } = req.body || {};
+  if (!id || !root) {
+    res.status(400).json({ error: 'Both "id" and "root" are required.' });
+    return;
+  }
+  if (!isAllowedRoot(root)) {
+    res.status(400).json({
+      error: `Root is not an allowed directory. Allowed bases: ${getWorkspaceRoots().join(', ')} (override with ALLOWED_PROJECT_ROOTS).`,
+    });
+    return;
+  }
+  const entry = registerProject(id, root);
+  res.json({ ok: true, id: entry.id, root: entry.root });
+});
+
 // ---------------------------------------------------------------------------
 // API
 // ---------------------------------------------------------------------------
@@ -94,6 +143,7 @@ app.get('/status', (req, res) => {
     res.json({
       ok: true,
       projects: [...projects.values()].map((p) => ({ id: p.id, root: p.root })),
+      workspaceRoots: getWorkspaceRoots(),
       model: process.env.CLAUDE_MODEL || 'sonnet',
       wsPort: WS_PORT,
       cliAvailable: !err,
@@ -119,12 +169,20 @@ app.post('/task', async (req, res) => {
     return;
   }
 
-  // Resolve which project folder this task targets.
-  let project;
-  try {
-    project = resolveProject(projects, projectId);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
+  // Resolve which project folder this task targets (auto-discovering if needed).
+  let project = null;
+  if (projectId) {
+    project = ensureProject(projectId); // registered, or discovered under workspace roots
+  } else if (projects.size === 1) {
+    project = [...projects.values()][0];
+  }
+  if (!project) {
+    const known = [...projects.keys()].join(', ') || '(none)';
+    res.status(400).json({
+      error: projectId
+        ? `Project "${projectId}" is not registered and no matching folder was found under the workspace roots (${getWorkspaceRoots().join(', ')}). Known: ${known}.`
+        : `Missing "projectId". Known projects: ${known}.`,
+    });
     return;
   }
 
@@ -179,11 +237,12 @@ app.listen(SERVER_PORT, () => {
   console.log(`\n  AI Visual Editor`);
   console.log(`  ▸ server   http://localhost:${SERVER_PORT}`);
   if (projects.size === 0) {
-    console.log(`  ▸ projects (none) — add projects.json or set PROJECT_ROOT in .env`);
+    console.log(`  ▸ projects (none yet) — new ones auto-register on first use`);
   } else {
     for (const { id, root } of projects.values()) {
-      console.log(`  ▸ project  [${id}]  overlay.js?project=${id}  →  ${root}`);
+      console.log(`  ▸ project  [${id}]  →  ${root}`);
     }
   }
-  console.log(`  ▸ shortcut Ctrl+Shift+E to toggle the overlay\n`);
+  console.log(`  ▸ workspace ${getWorkspaceRoots().join(', ')} (auto-discovery)`);
+  console.log(`  ▸ shortcut  Ctrl+Shift+E to toggle the overlay\n`);
 });

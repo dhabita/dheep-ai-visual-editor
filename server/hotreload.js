@@ -33,8 +33,11 @@ export function startHotReload(port, projects) {
     }
   }
 
-  const watchers = [];
-  for (const { id, root } of projects.values()) {
+  const watchers = new Map(); // id → watcher
+
+  /** Start watching a project root; safe to call again (no-op if already watched). */
+  function watch(id, root) {
+    if (watchers.has(id)) return;
     const watcher = chokidar.watch(root, {
       ignored: (p) => /node_modules|\.git|dist|build|\.next/.test(p),
       ignoreInitial: true,
@@ -52,14 +55,17 @@ export function startHotReload(port, projects) {
     };
 
     watcher.on('change', onChange).on('add', onChange);
-    watchers.push(watcher);
+    watchers.set(id, watcher);
     console.log(`[hotreload] watching [${id}] ${root}`);
   }
+
+  for (const { id, root } of projects.values()) watch(id, root);
 
   console.log(`[hotreload] WebSocket on ws://localhost:${port} (${projects.size} project(s))`);
 
   return {
     notify: (projectId, file) => broadcast(projectId, { type: 'reload', project: projectId, file }),
+    watch,
     close: () => {
       watchers.forEach((w) => w.close());
       wss.close();

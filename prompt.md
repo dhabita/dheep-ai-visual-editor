@@ -17,7 +17,9 @@ package yang perlu di-install di project ini.
 
 ## CONFIG (saya isi — kalau kosong, TANYAKAN ke saya dulu sebelum lanjut)
 - EDITOR_URL  = http://localhost:3000     # alamat server AI Visual Editor (port SERVER_PORT-nya)
-- PROJECT_ID  = ganti-dengan-id-unik      # id unik project ini (huruf kecil/dash), mis. "my-shop"
+- PROJECT_ID  = <nama-folder-project-ini> # WAJIB sama dengan nama folder project ini,
+                                          # supaya server bisa auto-discovery (mis. folder
+                                          # "ssc-landing-next" → PROJECT_ID "ssc-landing-next")
 
 ## YANG HARUS KAMU LAKUKAN
 
@@ -38,15 +40,14 @@ package yang perlu di-install di project ini.
 
 5) Setelah selesai, cetak ringkasan:
    - file mana yang kamu ubah,
-   - SATU baris yang harus saya tambahkan ke `projects.json` milik server editor,
-     memakai PATH ABSOLUT folder project ini (jalankan `pwd` untuk mendapatkannya):
-
-         "PROJECT_ID": "<path-absolut-project-ini>"
-
-   - pengingat: tambahkan baris itu ke projects.json server editor lalu RESTART
-     server editor (`npm start`), karena registry dibaca saat start.
-   - cara memakai: jalankan dev server project ini, buka di browser, tekan
-     Ctrl+Shift+E, klik elemen, tulis perintah.
+   - cara memakai: cukup jalankan dev server project ini lalu buka di browser.
+     TIDAK perlu menyentuh server editor — project ini akan TERDAFTAR OTOMATIS
+     (server menemukan folder ini lewat auto-discovery selama folder ini berada
+     di dalam workspace editor; defaultnya folder induk repo editor, mis.
+     ~/Documents/GitHub). Tekan Ctrl+Shift+E, klik elemen, tulis perintah.
+   - HANYA jika folder project ini di LUAR workspace editor: beri tahu saya, lalu
+     jalankan `pwd` dan cetak path absolutnya supaya saya bisa daftarkan manual
+     (set WORKSPACE_ROOTS di .env editor, atau POST /register {id, root}).
 
 ## RESEP PENYUNTIKAN PER-STACK (pilih yang cocok)
 
@@ -139,16 +140,17 @@ ke document.body. Pastikan dijaga agar tidak masuk ke production.
 
 ---
 
-## Setelah Claude selesai (langkah manual singkat di sisi server editor)
+## Setelah Claude selesai
 
-1. Buka `projects.json` di folder server **ai-visual-editor**, tambahkan entri yang
-   dicetak Claude, contoh:
-   ```json
-   {
-     "nimbus": "./example-site",
-     "my-shop": "/Users/kamu/work/my-shop"
-   }
-   ```
-2. Restart server editor: `npm start` (registry dibaca saat start).
-3. Jalankan dev server project kamu, buka di browser, tekan **Ctrl+Shift+E**, klik
-   elemen, tulis perintah. Selesai.
+Tidak ada langkah manual di sisi server editor. Selama folder project ini berada di
+dalam **workspace** editor (default: folder induk repo editor, mis. `~/Documents/GitHub`),
+project akan **otomatis terdaftar** saat pertama kali overlay-nya dimuat — tanpa edit
+`projects.json` dan tanpa restart.
+
+1. Pastikan server editor (**ai-visual-editor**) sedang jalan: `npm start`.
+2. Jalankan dev server project kamu, buka di browser.
+3. Tekan **Ctrl+Shift+E**, klik elemen, tulis perintah. Selesai.
+
+> Kalau project kamu di luar workspace default, tambahkan foldernya ke
+> `WORKSPACE_ROOTS` di `.env` editor (mis. `WORKSPACE_ROOTS=~/Documents/GitHub,~/work`),
+> atau daftarkan via `POST /register { "id", "root" }`.

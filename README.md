@@ -161,6 +161,15 @@ Each page declares which project it belongs to via `?project=<id>`:
 
 If `projects.json` is absent, the server falls back to the single `PROJECT_ROOT` in `.env`.
 
+### Zero-config: new projects register themselves
+
+You usually don't need to edit `projects.json` at all. When an overlay loads with a `?project=<id>` the server hasn't seen, it **auto-discovers** a folder named `<id>` under its **workspace roots** (default: the folder containing this editor repo, e.g. `~/Documents/GitHub`), registers it live (starts watching + persists), and uses it — **no manual edit, no restart**.
+
+So adding the editor to a new project is just: inject the overlay `<script ...?project=<folder-name>>` (see [`prompt.md`](./prompt.md)) and open it. As long as the folder name matches the id and lives under a workspace root, it just works.
+
+- Set `WORKSPACE_ROOTS` (comma/colon-separated) to search more places: `WORKSPACE_ROOTS=~/Documents/GitHub,~/work`.
+- For a project **outside** the workspace roots, register it explicitly: `POST /register { "id", "root" }` (the root must be inside `ALLOWED_PROJECT_ROOTS`, which defaults to the workspace roots).
+
 ## Add it to your own project
 
 Want to use it on an existing app? Two options:
@@ -201,6 +210,7 @@ Copy `.env.example` → `.env`:
 |--------|------|-------------|
 | `GET` | `/status` | Health, model, registered projects, CLI availability + version. |
 | `GET` | `/projects` | List registered projects. |
+| `POST` | `/register` | Register a project explicitly. Body: `{ id, root }` (root must be inside an allowed base). |
 | `GET` | `/history` | Task log (newest first). `?project=<id>` filters. |
 | `POST` | `/task` | Run an edit. Body: `{ prompt, context?, projectId?, sessionId? }`. Responds as **SSE** (`start`, `text`, `tool`, `edited`, `done`, `error`). |
 | `GET` | `/overlay.js` | The bundled overlay. `?project=<id>` selects the project. |

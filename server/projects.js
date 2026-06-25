@@ -66,3 +66,96 @@ export function resolveProject(projects, projectId) {
   }
   return found;
 }
+
+// ---------------------------------------------------------------------------
+// Zero-config auto-discovery: find a project folder by id under "workspace
+// roots", so a new project just works with ?project=<folder-name> — no manual
+// projects.json edit and no server restart.
+// ---------------------------------------------------------------------------
+
+const SKIP_DIRS = new Set([
+  'node_modules', '.git', 'dist', 'build', '.next', '.cache', '.turbo',
+  '.vercel', 'coverage', 'out', '.svelte-kit', '.nuxt',
+]);
+
+/**
+ * Base directories searched by discoverProject().
+ * Configure with WORKSPACE_ROOTS (comma/colon-separated); defaults to the
+ * folder that contains this editor repo (e.g. ~/Documents/GitHub).
+ */
+export function getWorkspaceRoots() {
+  const env = process.env.WORKSPACE_ROOTS;
+  if (env) {
+    return env
+      .split(/[,:]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map((s) => path.resolve(ROOT, s));
+  }
+  return [path.dirname(ROOT)];
+}
+
+/**
+ * Search the workspace roots for a directory whose name === id (depth-limited,
+ * skipping heavy/build dirs). Returns the absolute path, or null.
+ */
+export function discoverProject(id, { maxDepth = 4 } = {}) {
+  if (!id || /[\\/]/.test(id) || id === '.' || id === '..') return null;
+  for (const base of getWorkspaceRoots()) {
+    const hit = findDir(base, id, maxDepth);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function findDir(dir, name, depth) {
+  if (depth < 0) return null;
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  // Breadth-first: prefer the shallowest match.
+  const subdirs = entries.filter(
+    (e) => e.isDirectory() && !SKIP_DIRS.has(e.name) && !e.name.startsWith('.')
+  );
+  for (const e of subdirs) {
+    if (e.name === name) return path.join(dir, name);
+  }
+  for (const e of subdirs) {
+    const found = findDir(path.join(dir, e.name), name, depth - 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** Persist the current registry back to projects.json (absolute paths). */
+export function persistProjects(projects) {
+  try {
+    const obj = {};
+    for (const { id, root } of projects.values()) obj[id] = root;
+    fs.writeFileSync(REGISTRY_FILE, JSON.stringify(obj, null, 2) + '\n');
+  } catch (err) {
+    console.error(`[projects] could not persist projects.json: ${err.message}`);
+  }
+}
+
+/** Is `root` an existing directory inside one of the allowed base dirs? */
+export function isAllowedRoot(root) {
+  const abs = path.resolve(root);
+  try {
+    if (!fs.statSync(abs).isDirectory()) return false;
+  } catch {
+    return false;
+  }
+  // ALLOWED_PROJECT_ROOTS overrides; otherwise allow the workspace roots.
+  const env = process.env.ALLOWED_PROJECT_ROOTS;
+  const bases = env
+    ? env.split(/[,:]+/).map((s) => path.resolve(ROOT, s.trim())).filter(Boolean)
+    : getWorkspaceRoots();
+  return bases.some((base) => {
+    const rel = path.relative(base, abs);
+    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  });
+}
