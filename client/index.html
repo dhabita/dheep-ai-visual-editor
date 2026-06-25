@@ -102,12 +102,11 @@
 
     /* History */
     .hist { display: grid; gap: 8px; }
-    .hrow { display: grid; grid-template-columns: 150px 1fr auto; gap: 12px; align-items: center;
-      background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
-    .hrow .when { color: var(--muted); font: 12px ui-monospace, Menlo, monospace; }
-    .hrow .body .p { font-weight: 600; }
-    .hrow .body .s { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
-    .hrow .right { text-align: right; color: var(--muted); font-size: 12px; }
+    .hrow { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+    .hrow .when { color: var(--muted); font: 12px ui-monospace, Menlo, monospace; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .hrow .p { font-weight: 600; margin-top: 6px; }
+    .hrow .s { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+    .hrow .files { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
 
     /* Toast */
     #toasts { position: fixed; right: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
@@ -262,11 +261,12 @@
       const rows = state.history.slice(0, 25);
       if (!rows.length) { el.innerHTML = '<div class="empty">No tasks yet.</div>'; return; }
       el.innerHTML = rows.map(t=>{
-        const files = (t.editedFiles||[]).map(f=>`<span class="file-chip">${esc(f)}</span>`).join(' ');
+        const files = (t.editedFiles||[]).map(f=>`<span class="file-chip">✎ ${esc(f)}</span>`).join('');
         return `<div class="hrow">
-          <div class="when">${esc(new Date(t.time).toLocaleString())}<br><span style="opacity:.7">${ago(new Date(t.time).getTime())}</span></div>
-          <div class="body"><div class="p"><span class="chip">${esc(t.project||'—')}</span> ${esc(t.prompt)}</div><div class="s">${esc(t.summary||'')}</div></div>
-          <div class="right">${files||'—'}</div>
+          <div class="when"><span class="chip">${esc(t.project||'—')}</span> ${esc(new Date(t.time).toLocaleString())} · ${ago(new Date(t.time).getTime())}</div>
+          <div class="p">${esc(t.prompt)}</div>
+          ${t.summary?`<div class="s">${esc(t.summary)}</div>`:''}
+          ${files?`<div class="files">${files}</div>`:''}
         </div>`;
       }).join('');
     }
