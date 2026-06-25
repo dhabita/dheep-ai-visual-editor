@@ -10,8 +10,9 @@ const WATCH_EXT = /\.(html?|css|js|jsx|ts|tsx|vue|svelte)$/i;
  *
  * @param {number} port
  * @param {Map<string,{id:string,root:string}>} projects
+ * @param {(projectId:string, file:string)=>void} [onChange] notified on each change
  */
-export function startHotReload(port, projects) {
+export function startHotReload(port, projects, onChange) {
   const wss = new WebSocketServer({ port });
 
   // Tag each socket with the project id from its connection URL.
@@ -51,6 +52,9 @@ export function startHotReload(port, projects) {
       debounce = setTimeout(() => {
         console.log(`[hotreload] (${id}) change: ${filePath} → reload`);
         broadcast(id, { type: 'reload', project: id, file: filePath });
+        if (typeof onChange === 'function') {
+          try { onChange(id, filePath); } catch { /* ignore */ }
+        }
       }, 120);
     };
 

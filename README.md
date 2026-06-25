@@ -38,6 +38,7 @@ A lightweight, open-source **AI visual editor** and **vibe-coding** tool. Point 
 - [Prerequisites](#prerequisites)
 - [Quick start](#quick-start)
 - [Using the chat sidebar](#using-the-chat-sidebar)
+- [Live dashboard](#live-dashboard)
 - [Multiple projects at once](#multiple-projects-at-once)
 - [Add it to your own project](#add-it-to-your-own-project)
 - [Configuration](#configuration)
@@ -126,7 +127,7 @@ npx serve -l 5050 ./example-site
 
 Open **http://localhost:5050**, and the AI chat sidebar appears on the right. Type *"make the hero background a dark gradient"* and hit Enter. 🎉
 
-Open **http://localhost:3000** (or your `SERVER_PORT`) for the dashboard: live status + task history.
+Open **http://localhost:3000** (or your `SERVER_PORT`) for the **live dashboard** — see [Live dashboard](#live-dashboard).
 
 ## Using the chat sidebar
 
@@ -137,6 +138,18 @@ Open **http://localhost:3000** (or your `SERVER_PORT`) for the dashboard: live s
 - **History survives reloads** — when the page hot-reloads after an edit, the chat and attached context are restored from `localStorage`. Use the **⌫** button to clear the thread.
 - Status dot shows server/CLI health; each message streams Claude's tool activity (`› Read`, `✎ edited styles.css`) and a summary.
 - **Context meter** (above the input) shows how full the conversation context is — e.g. `context 78% · 156k/200k · $0.420` — turning amber past 70% and red past 90%. When the CLI auto-compacts a long conversation, a `🗜 context auto-compacted` line appears. Hit **⌫** to start fresh if you want a smaller context.
+
+## Live dashboard
+
+Open the server root (e.g. `http://localhost:3000`) for a real-time control panel that shows **exactly what the AI is doing**:
+
+- **Live activity** — every running `claude` task as an animated card: project, prompt, a ticking elapsed timer, the current step, a streaming step log (`Read`, `✎ edited …`, `🗜 compacted`), edited-file chips, and a context-usage meter — updated live.
+- **KPI cards** — active tasks, total tasks, files edited, session cost, and tokens (with a sparkline).
+- **Activity chart** — tasks per minute (inline SVG).
+- **Projects** — each registered project with its path, task/edit counts, and last-used time.
+- **Recent tasks** — a timeline of completed tasks with summaries and edited files, plus toasts for starts/finishes, file changes, and auto-registered projects.
+
+It streams over Server-Sent Events (`GET /events`) — no polling. The feed reflects edits triggered from any browser or project.
 
 ## Multiple projects at once
 
@@ -213,6 +226,7 @@ Copy `.env.example` → `.env`:
 | `GET` | `/status` | Health, model, registered projects, CLI availability + version. |
 | `GET` | `/projects` | List registered projects. |
 | `POST` | `/register` | Register a project explicitly. Body: `{ id, root }` (root must be inside an allowed base). |
+| `GET` | `/events` | Live dashboard feed (**SSE**): `hello` snapshot, then `task:start`/`task:update`/`task:end`/`task:remove`, `reload`, `project`. |
 | `GET` | `/history` | Task log (newest first). `?project=<id>` filters. |
 | `POST` | `/task` | Run an edit. Body: `{ prompt, context?, projectId?, sessionId? }`. Responds as **SSE** (`start`, `text`, `tool`, `edited`, `done`, `error`). |
 | `GET` | `/overlay.js` | The bundled overlay. `?project=<id>` selects the project. |
@@ -233,7 +247,7 @@ dheep-ai-visual-editor/
 │   ├── sidebar.js     Docked chat sidebar: messages, streaming, session, element attach
 │   ├── highlight.js   Blue hover outline + selector/size label
 │   └── overlay.css    Sidebar & highlight styles
-├── client/index.html  Dashboard: status + task history
+├── client/index.html  Live dashboard (SSE): running tasks, projects, stats, charts
 ├── example-site/      Demo site to try it on
 ├── prompt.md          Paste-into-your-project installer prompt
 ├── projects.example.json

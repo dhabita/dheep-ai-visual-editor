@@ -33,9 +33,49 @@ app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 
 // ---------------------------------------------------------------------------
+// Live dashboard event bus — broadcasts task activity to /events listeners.
+// ---------------------------------------------------------------------------
+const dashboardClients = new Set(); // open SSE responses
+const activeTasks = new Map();      // taskId → live task record
+let taskSeq = 0;
+const stats = {
+  startedAt: Date.now(),
+  tasks: 0,
+  edits: 0,
+  errors: 0,
+  tokensIn: 0,
+  tokensOut: 0,
+  costUsd: 0,
+  activity: [],                     // recent task end timestamps (for the chart)
+};
+
+function dashBroadcast(event, data) {
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const res of dashboardClients) {
+    try { res.write(payload); } catch { /* dropped client */ }
+  }
+}
+
+function publicStats() {
+  return {
+    uptimeMs: Date.now() - stats.startedAt,
+    tasks: stats.tasks,
+    edits: stats.edits,
+    errors: stats.errors,
+    tokensIn: stats.tokensIn,
+    tokensOut: stats.tokensOut,
+    costUsd: stats.costUsd,
+    activeCount: activeTasks.size,
+    activity: stats.activity.slice(-120),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Hot reload (one WebSocket server, one watcher per project)
 // ---------------------------------------------------------------------------
-const hot = startHotReload(WS_PORT, projects);
+const hot = startHotReload(WS_PORT, projects, (projectId, file) => {
+  dashBroadcast('reload', { project: projectId, file, at: Date.now() });
+});
 
 /**
  * Make sure a project id is registered. If unknown, try to auto-discover a
@@ -55,6 +95,7 @@ function registerProject(id, root) {
   projects.set(id, entry);
   hot.watch(id, entry.root);
   persistProjects(projects);
+  dashBroadcast('project', { id: entry.id, root: entry.root });
   console.log(`[projects] auto-registered "${id}" → ${entry.root}`);
   return entry;
 }
@@ -194,9 +235,42 @@ app.post('/task', async (req, res) => {
   });
   res.flushHeaders?.();
 
+  // Live task record mirrored to the dashboard.
+  const taskId = `t${++taskSeq}`;
+  const task = {
+    id: taskId,
+    project: project.id,
+    prompt: prompt.slice(0, 240),
+    selector: context?.selector || null,
+    startedAt: Date.now(),
+    status: 'running',
+    step: 'starting…',
+    steps: [],
+    editedFiles: [],
+    usage: null,
+    error: null,
+  };
+  activeTasks.set(taskId, task);
+  dashBroadcast('task:start', task);
+
+  const pushStep = (text, kind) => {
+    task.step = text;
+    task.steps.push({ t: text, kind, at: Date.now() });
+    if (task.steps.length > 40) task.steps.shift();
+  };
+
   const emit = (event, data) => {
+    // Stream to the initiating browser.
     res.write(`event: ${event}\n`);
     res.write(`data: ${JSON.stringify(data)}\n\n`);
+    // Mirror to the dashboard.
+    if (event === 'text' && data.delta) task.step = 'thinking…';
+    else if (event === 'tool') pushStep(`${data.name} ${dashToolArg(data.input)}`.trim(), 'tool');
+    else if (event === 'edited') { task.editedFiles.push(data.file); pushStep(`edited ${data.file}`, 'edit'); }
+    else if (event === 'tool_error') pushStep(`error: ${data.name}`, 'err');
+    else if (event === 'compacted') pushStep('context auto-compacted', 'compact');
+    else if (event === 'usage') task.usage = data;
+    dashBroadcast('task:update', task);
   };
 
   const startedAt = new Date().toISOString();
@@ -222,12 +296,63 @@ app.post('/task', async (req, res) => {
     if (editedFiles.length) hot.notify(project.id, editedFiles[0]);
 
     emit('done', { summary, editedFiles, sessionId: newSession, usage });
+
+    // Update dashboard task + cumulative stats.
+    task.status = 'done';
+    task.endedAt = Date.now();
+    task.summary = summary;
+    stats.tasks += 1;
+    stats.edits += editedFiles.length;
+    if (usage) { stats.tokensIn += usage.contextTokens || 0; stats.tokensOut += usage.outputTokens || 0; if (usage.costUsd) stats.costUsd += usage.costUsd; }
+    stats.activity.push(task.endedAt);
+    dashBroadcast('task:end', task);
   } catch (err) {
     console.error(`[task:${project.id}] error:`, err);
     emit('error', { message: err.message });
+    task.status = 'error';
+    task.endedAt = Date.now();
+    task.error = err.message;
+    stats.errors += 1;
+    stats.activity.push(task.endedAt);
+    dashBroadcast('task:end', task);
   } finally {
     res.end();
+    // Keep finished tasks visible briefly, then drop from the active list.
+    setTimeout(() => {
+      activeTasks.delete(taskId);
+      dashBroadcast('task:remove', { id: taskId });
+    }, 10000);
   }
+});
+
+function dashToolArg(input) {
+  if (!input) return '';
+  const f = input.file_path || input.path || input.pattern || '';
+  return f ? `(${f})` : '';
+}
+
+/**
+ * GET /events — live dashboard feed (SSE). Sends an initial snapshot, then
+ * task:start / task:update / task:end / task:remove / reload / project events.
+ */
+app.get('/events', (req, res) => {
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  });
+  res.flushHeaders?.();
+
+  res.write(`event: hello\ndata: ${JSON.stringify({
+    activeTasks: [...activeTasks.values()],
+    projects: [...projects.values()].map((p) => ({ id: p.id, root: p.root })),
+    stats: publicStats(),
+    server: { model: process.env.CLAUDE_MODEL || 'sonnet', wsPort: WS_PORT, serverPort: SERVER_PORT },
+  })}\n\n`);
+
+  dashboardClients.add(res);
+  const ping = setInterval(() => { try { res.write(': ping\n\n'); } catch { /* */ } }, 25000);
+  req.on('close', () => { clearInterval(ping); dashboardClients.delete(res); });
 });
 
 // Optional dashboard.
