@@ -203,7 +203,7 @@ app.post('/task', async (req, res) => {
   emit('start', { startedAt, project: project.id });
 
   try {
-    const { summary, editedFiles, sessionId: newSession } = await runTask(
+    const { summary, editedFiles, sessionId: newSession, usage } = await runTask(
       { prompt, context, projectRoot: project.root, sessionId },
       emit
     );
@@ -221,7 +221,7 @@ app.post('/task', async (req, res) => {
     // Nudge this project's browsers to reload even if the watcher missed it.
     if (editedFiles.length) hot.notify(project.id, editedFiles[0]);
 
-    emit('done', { summary, editedFiles, sessionId: newSession });
+    emit('done', { summary, editedFiles, sessionId: newSession, usage });
   } catch (err) {
     console.error(`[task:${project.id}] error:`, err);
     emit('error', { message: err.message });

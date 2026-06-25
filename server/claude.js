@@ -58,6 +58,7 @@ export function runTask({ prompt, context, projectRoot, sessionId }, emit) {
     let stderr = '';
     let stdoutTail = '';
     let capturedSession = sessionId || null;
+    let capturedUsage = null;
     let settled = false;
 
     const finish = (fn, val) => {
@@ -96,7 +97,12 @@ export function runTask({ prompt, context, projectRoot, sessionId }, emit) {
       if (buffer.trim()) handleEvent(buffer.trim());
       if (settled) return;
       if (summary || editedFiles.size || code === 0) {
-        finish(resolve, { summary: summary.trim(), editedFiles: [...editedFiles], sessionId: capturedSession });
+        finish(resolve, {
+          summary: summary.trim(),
+          editedFiles: [...editedFiles],
+          sessionId: capturedSession,
+          usage: capturedUsage,
+        });
       } else {
         const msg = (stderr || stdoutTail || `Claude CLI exited with code ${code}`).trim();
         finish(reject, new Error(msg.slice(0, 600)));
@@ -142,19 +148,48 @@ export function runTask({ prompt, context, projectRoot, sessionId }, emit) {
         }
         case 'result': {
           if (typeof ev.result === 'string' && ev.result.trim()) summary = ev.result;
+          capturedUsage = extractUsage(ev);
+          if (capturedUsage) emit('usage', capturedUsage);
           if (ev.is_error) {
             finish(reject, new Error(ev.result || ev.subtype || 'Claude CLI reported an error'));
           }
           break;
         }
         case 'system':
-          // init / hook noise — ignore.
+          // The CLI emits this when it auto-compacts a large conversation.
+          if (ev.subtype && /compact/i.test(ev.subtype)) {
+            const meta = ev.compact_metadata || {};
+            emit('compacted', { trigger: meta.trigger || null, preTokens: meta.pre_tokens || null });
+          }
           break;
         default:
           break;
       }
     }
   });
+}
+
+/**
+ * Pull context-window usage out of the CLI's `result` event. The total input
+ * (uncached + cached) approximates how full the conversation context is.
+ */
+function extractUsage(ev) {
+  const u = ev.usage || {};
+  const contextTokens =
+    (u.input_tokens || 0) +
+    (u.cache_read_input_tokens || 0) +
+    (u.cache_creation_input_tokens || 0);
+  let contextWindow = 200000;
+  const mu = ev.modelUsage && Object.values(ev.modelUsage)[0];
+  if (mu && mu.contextWindow) contextWindow = mu.contextWindow;
+  if (!contextTokens && !u.output_tokens) return null;
+  return {
+    contextTokens,
+    contextWindow,
+    pct: contextWindow ? Math.min(100, Math.round((contextTokens / contextWindow) * 100)) : null,
+    outputTokens: u.output_tokens || 0,
+    costUsd: typeof ev.total_cost_usd === 'number' ? ev.total_cost_usd : null,
+  };
 }
 
 /** Keep large tool inputs out of the SSE trace shown in the popup. */

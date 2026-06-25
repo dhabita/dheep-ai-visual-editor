@@ -12,6 +12,7 @@ let aveChatLog = [];        // persisted transcript: [{role, text, ctx?, trace:[
 let aveCurAssistant = null; // current streaming assistant entry within aveChatLog
 let avePendingReload = false; // hot-reload deferred until the active task finishes
 let aveSaveTimer = null;
+let aveSbUsage = null;       // last context-window usage {contextTokens, contextWindow, pct, costUsd}
 const AVE_MAX_MSGS = 200;
 
 function aveSbCfg() { return window.__AVE_CONFIG__ || {}; }
@@ -24,6 +25,7 @@ function aveSaveState() {
       v: 1,
       sessionId: aveSbSession,
       attached: aveSbAttached,
+      usage: aveSbUsage,
       open: aveSb ? aveSb.classList.contains('open') : true,
       messages: aveChatLog.slice(-AVE_MAX_MSGS),
     }));
@@ -66,6 +68,10 @@ function aveInitSidebar() {
     </div>
     <div class="ave-sb-msgs"></div>
     <div class="ave-sb-foot">
+      <div class="ave-sb-ctx" hidden title="How full the Claude conversation context is. The CLI auto-compacts when it gets close to full.">
+        <div class="ave-ctx-bar"><div class="ave-ctx-fill"></div></div>
+        <span class="ave-ctx-text"></span>
+      </div>
       <div class="ave-sb-chip" hidden></div>
       <div class="ave-sb-inputrow">
         <button class="ave-sb-pick" title="Pick an element (Ctrl+Shift+E)">◎</button>
@@ -97,6 +103,7 @@ function aveInitSidebar() {
     aveChatLog = saved.messages;
     aveRenderLog();
     if (saved.attached) aveRestoreAttachment(saved.attached);
+    if (saved.usage) aveSbSetUsage(saved.usage);
   } else {
     aveSbHint('Pick an element or just describe what you want to change.');
   }
@@ -109,6 +116,7 @@ function aveSbClear() {
   aveSbSession = null;
   aveSbAttached = null;
   aveCurAssistant = null;
+  aveSbSetUsage(null);
   aveClearState();
   aveSb.querySelector('.ave-sb-chip').hidden = true;
   aveSbMsgs().innerHTML = '';
@@ -261,10 +269,15 @@ async function aveSbConsume(body, bubble) {
         aveSbTrace(bubble, `› ${data.name} ${aveSbToolArg(data.input)}`, 't-tool');
       } else if (event === 'edited') {
         aveSbTrace(bubble, `✎ edited ${data.file}`, 't-edit');
+      } else if (event === 'compacted') {
+        aveSbTrace(bubble, '🗜 context auto-compacted by Claude', 't-compact');
+      } else if (event === 'usage') {
+        aveSbSetUsage(data);
       } else if (event === 'tool_error') {
         aveSbTrace(bubble, `✗ ${data.name}: ${data.error}`, 't-err');
       } else if (event === 'done') {
         if (data.sessionId) aveSbSession = data.sessionId;
+        if (data.usage) aveSbSetUsage(data.usage);
         if (!md.textContent.trim() && data.summary) md.textContent = data.summary;
         if (aveCurAssistant) {
           aveCurAssistant.text = md.textContent;
@@ -359,6 +372,27 @@ function aveSbStatus(text, cls) {
   const el = aveSb.querySelector('.ave-sb-status');
   el.className = 'ave-sb-status' + (cls ? ' ' + cls : '');
   el.textContent = text || '';
+}
+
+/** Render the context-usage meter (and persist it). */
+function aveSbSetUsage(u) {
+  aveSbUsage = u || null;
+  const box = aveSb.querySelector('.ave-sb-ctx');
+  if (!u || u.pct == null) { box.hidden = true; aveSaveThrottled(); return; }
+  box.hidden = false;
+  box.classList.remove('warn', 'danger');
+  if (u.pct >= 90) box.classList.add('danger');
+  else if (u.pct >= 70) box.classList.add('warn');
+  box.querySelector('.ave-ctx-fill').style.width = Math.max(2, u.pct) + '%';
+  box.querySelector('.ave-ctx-text').textContent =
+    `context ${u.pct}% · ${aveFmtTok(u.contextTokens)}/${aveFmtTok(u.contextWindow)}` +
+    (u.costUsd != null ? ` · $${u.costUsd.toFixed(3)}` : '');
+  aveSaveThrottled();
+}
+
+function aveFmtTok(n) {
+  n = n || 0;
+  return n >= 1000 ? Math.round(n / 1000) + 'k' : String(n);
 }
 
 function aveSbSetBusy(busy) {

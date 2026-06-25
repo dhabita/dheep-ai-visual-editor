@@ -246,6 +246,25 @@ body.ave-pushed {
 #ave-sidebar .ave-msg .ave-trace .t-tool { color: #fbbf24; }
 #ave-sidebar .ave-msg .ave-trace .t-edit { color: #4ade80; }
 #ave-sidebar .ave-msg .ave-trace .t-err { color: #f87171; }
+#ave-sidebar .ave-msg .ave-trace .t-compact { color: #22d3ee; }
+
+/* Context-window usage meter */
+#ave-sidebar .ave-sb-ctx { margin-bottom: 8px; }
+#ave-sidebar .ave-ctx-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: #2a2a32;
+  overflow: hidden;
+}
+#ave-sidebar .ave-ctx-fill {
+  height: 100%;
+  width: 2%;
+  background: #4ade80;
+  transition: width 0.3s ease, background 0.3s ease;
+}
+#ave-sidebar .ave-sb-ctx.warn .ave-ctx-fill { background: #fbbf24; }
+#ave-sidebar .ave-sb-ctx.danger .ave-ctx-fill { background: #f87171; }
+#ave-sidebar .ave-ctx-text { display: block; margin-top: 3px; font-size: 11px; color: #8a8a96; }
 #ave-sidebar .ave-msg .ave-ctxnote {
   font: 11px ui-monospace, Menlo, monospace;
   opacity: 0.8;

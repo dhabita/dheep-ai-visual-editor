@@ -68,6 +68,7 @@ It's local-first, framework-agnostic, and free to run if you already have a Clau
 - 🔑 **No API key needed** — uses your local `claude` CLI login (subscription), so nothing is billed per token by this tool and no secrets are stored.
 - ⚡ **Instant hot reload** — `chokidar` watches your files and reloads the browser the moment a change lands.
 - 💾 **Persistent chat & context** — the conversation, session, and attached element survive page/hot reloads (saved per project in `localStorage`); reloads are deferred until a task finishes so nothing is lost mid-stream.
+- 📊 **Context meter & auto-compaction** — a live meter shows how full the Claude conversation context is (tokens, %, cost); the CLI auto-compacts large conversations and the sidebar flags it with a `🗜 context auto-compacted` line.
 - 🗂️ **Multi-project** — one server edits many projects in different folders, in parallel, each isolated.
 - 🧩 **Framework-agnostic** — plain HTML, Vite, Next.js, React (CRA), Astro, SvelteKit, Nuxt, and more. Drop in one `<script>` tag (dev only).
 - 🪶 **Tiny & dependency-light** — a small Express server and a single injected JS bundle. No build step.
@@ -135,6 +136,7 @@ Open **http://localhost:3000** (or your `SERVER_PORT`) for the dashboard: live s
 - **Keep the thread going** — say *"now center it"* or *"undo that"*; the session remembers context.
 - **History survives reloads** — when the page hot-reloads after an edit, the chat and attached context are restored from `localStorage`. Use the **⌫** button to clear the thread.
 - Status dot shows server/CLI health; each message streams Claude's tool activity (`› Read`, `✎ edited styles.css`) and a summary.
+- **Context meter** (above the input) shows how full the conversation context is — e.g. `context 78% · 156k/200k · $0.420` — turning amber past 70% and red past 90%. When the CLI auto-compacts a long conversation, a `🗜 context auto-compacted` line appears. Hit **⌫** to start fresh if you want a smaller context.
 
 ## Multiple projects at once
 
