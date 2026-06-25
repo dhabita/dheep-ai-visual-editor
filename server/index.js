@@ -3,6 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
+import net from 'node:net';
 import express from 'express';
 import cors from 'cors';
 
@@ -73,9 +74,40 @@ function publicStats() {
 // ---------------------------------------------------------------------------
 // Hot reload (one WebSocket server, one watcher per project)
 // ---------------------------------------------------------------------------
-const hot = startHotReload(WS_PORT, projects, (projectId, file) => {
-  dashBroadcast('reload', { project: projectId, file, at: Date.now() });
-});
+const hot = startHotReload(
+  WS_PORT,
+  projects,
+  (projectId, file) => dashBroadcast('reload', { project: projectId, file, at: Date.now() }),
+  (projectId, origin) => {
+    // A project page connected — remember its origin (dev-server port).
+    const p = projects.get(projectId);
+    if (p && p.origin !== origin) {
+      p.origin = origin;
+      dashBroadcast('project', { id: p.id, root: p.root, origin });
+    }
+  }
+);
+
+/** TCP-probe an origin (http://host:port) to see if its dev server is up. */
+function probePort(origin, timeout = 500) {
+  return new Promise((resolve) => {
+    let host, port;
+    try {
+      const u = new URL(origin);
+      host = u.hostname;
+      port = Number(u.port || (u.protocol === 'https:' ? 443 : 80));
+    } catch {
+      return resolve(false);
+    }
+    const sock = net.connect({ host, port });
+    let done = false;
+    const fin = (v) => { if (done) return; done = true; sock.destroy(); resolve(v); };
+    sock.setTimeout(timeout);
+    sock.on('connect', () => fin(true));
+    sock.on('timeout', () => fin(false));
+    sock.on('error', () => fin(false));
+  });
+}
 
 /**
  * Make sure a project id is registered. If unknown, try to auto-discover a
@@ -154,7 +186,19 @@ app.get('/bookmarklet.js', (req, res) => {
 
 // List registered projects.
 app.get('/projects', (req, res) => {
-  res.json([...projects.values()].map((p) => ({ id: p.id, root: p.root })));
+  res.json([...projects.values()].map((p) => ({ id: p.id, root: p.root, origin: p.origin || null })));
+});
+
+// Probe each project's dev-server port and report whether it's live.
+app.get('/projects/status', async (req, res) => {
+  const out = await Promise.all(
+    [...projects.values()].map(async (p) => ({
+      id: p.id,
+      origin: p.origin || null,
+      up: p.origin ? await probePort(p.origin) : false,
+    }))
+  );
+  res.json(out);
 });
 
 // Explicit registration for projects outside the workspace roots.
@@ -345,7 +389,7 @@ app.get('/events', (req, res) => {
 
   res.write(`event: hello\ndata: ${JSON.stringify({
     activeTasks: [...activeTasks.values()],
-    projects: [...projects.values()].map((p) => ({ id: p.id, root: p.root })),
+    projects: [...projects.values()].map((p) => ({ id: p.id, root: p.root, origin: p.origin || null })),
     stats: publicStats(),
     server: { model: process.env.CLAUDE_MODEL || 'sonnet', wsPort: WS_PORT, serverPort: SERVER_PORT },
   })}\n\n`);

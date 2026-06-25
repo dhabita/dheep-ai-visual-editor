@@ -11,11 +11,13 @@ const WATCH_EXT = /\.(html?|css|js|jsx|ts|tsx|vue|svelte)$/i;
  * @param {number} port
  * @param {Map<string,{id:string,root:string}>} projects
  * @param {(projectId:string, file:string)=>void} [onChange] notified on each change
+ * @param {(projectId:string, origin:string)=>void} [onClient] notified when a project page connects (with its origin/port)
  */
-export function startHotReload(port, projects, onChange) {
+export function startHotReload(port, projects, onChange, onClient) {
   const wss = new WebSocketServer({ port });
 
-  // Tag each socket with the project id from its connection URL.
+  // Tag each socket with the project id from its connection URL, and report the
+  // page's origin (e.g. http://localhost:3006) so we know the project's dev port.
   wss.on('connection', (ws, req) => {
     let projectId = null;
     try {
@@ -23,6 +25,10 @@ export function startHotReload(port, projects, onChange) {
       projectId = url.searchParams.get('project');
     } catch { /* ignore */ }
     ws.aveProject = projectId;
+    const origin = req.headers.origin || null;
+    if (projectId && origin && typeof onClient === 'function') {
+      try { onClient(projectId, origin); } catch { /* ignore */ }
+    }
   });
 
   function broadcast(projectId, payload) {

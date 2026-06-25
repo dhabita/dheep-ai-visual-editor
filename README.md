@@ -146,7 +146,7 @@ Open the server root (e.g. `http://localhost:3000`) for a real-time control pane
 - **Live activity** — every running `claude` task as an animated card: project, prompt, a ticking elapsed timer, the current step, a streaming step log (`Read`, `✎ edited …`, `🗜 compacted`), edited-file chips, and a context-usage meter — updated live.
 - **KPI cards** — active tasks, total tasks, files edited, session cost, and tokens (with a sparkline).
 - **Activity chart** — tasks per minute (inline SVG).
-- **Projects** — each registered project with its path, task/edit counts, and last-used time.
+- **Projects** — each registered project with its path, task/edit counts, last-used time, the **detected dev-server port** with a live up/down status, and an **Open ↗** button to launch the running site in a new tab. (The port is detected automatically from the project page's overlay connection; the server TCP-probes it for status.)
 - **Recent tasks** — a timeline of completed tasks with summaries and edited files, plus toasts for starts/finishes, file changes, and auto-registered projects.
 
 It streams over Server-Sent Events (`GET /events`) — no polling. The feed reflects edits triggered from any browser or project.
@@ -227,6 +227,7 @@ Copy `.env.example` → `.env`:
 | `GET` | `/projects` | List registered projects. |
 | `POST` | `/register` | Register a project explicitly. Body: `{ id, root }` (root must be inside an allowed base). |
 | `GET` | `/events` | Live dashboard feed (**SSE**): `hello` snapshot, then `task:start`/`task:update`/`task:end`/`task:remove`, `reload`, `project`. |
+| `GET` | `/projects/status` | Probe each project's detected dev-server port: `[{ id, origin, up }]`. |
 | `GET` | `/history` | Task log (newest first). `?project=<id>` filters. |
 | `POST` | `/task` | Run an edit. Body: `{ prompt, context?, projectId?, sessionId? }`. Responds as **SSE** (`start`, `text`, `tool`, `edited`, `done`, `error`). |
 | `GET` | `/overlay.js` | The bundled overlay. `?project=<id>` selects the project. |

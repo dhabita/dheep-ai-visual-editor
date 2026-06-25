@@ -92,9 +92,22 @@
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
     .pcard { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 15px; }
     .pcard .id { font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .pcard .id .grow { margin-left: auto; }
     .pcard .path { color: var(--muted); font: 11px ui-monospace, Menlo, monospace; margin: 6px 0 10px; word-break: break-all; }
     .pcard .pstats { display: flex; gap: 16px; color: var(--muted); font-size: 12px; }
     .pcard .pstats b { color: var(--ink); font-size: 15px; }
+    .pcard .pfoot { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+    .port { display: inline-flex; align-items: center; gap: 6px; font: 11px ui-monospace, Menlo, monospace; padding: 4px 9px; border-radius: 7px; border: 1px solid var(--line); }
+    .port .d { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+    .port.up { color: #bbf7d0; border-color: #1f5135; } .port.up .d { background: var(--ok); box-shadow: 0 0 7px var(--ok); }
+    .port.down { color: #fecaca; border-color: #4c1d1d; } .port.down .d { background: var(--err); }
+    .port.unknown { color: var(--muted); }
+    button.open {
+      margin-left: auto; cursor: pointer; font: 600 12px -apple-system, sans-serif;
+      background: var(--brand); color: #fff; border: none; border-radius: 7px; padding: 6px 12px;
+    }
+    button.open:hover { background: #4f46e5; }
+    button.open:disabled { background: #2a2a35; color: var(--muted); cursor: default; }
 
     /* Chart */
     .chartcard { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
@@ -236,10 +249,19 @@
         const p = state.projects[id];
         const hist = state.history.filter(t=>t.project===id);
         const last = hist[0] ? ago(new Date(hist[0].time).getTime()) : '—';
+        const origin = p.origin || null;
+        let port = null; try { if (origin) port = new URL(origin).port || '80'; } catch {}
+        const portChip = origin
+          ? `<span class="port ${p.up?'up':'down'}"><span class="d"></span> :${esc(port)} ${p.up?'live':'down'}</span>`
+          : `<span class="port unknown"><span class="d"></span> port unknown</span>`;
+        const openBtn = origin
+          ? `<button class="open" data-origin="${esc(origin)}">Open ↗</button>`
+          : `<button class="open" disabled title="Open the project once with the overlay so its port is detected">Open ↗</button>`;
         return `<div class="pcard">
           <div class="id"><span class="d" style="width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block"></span> ${esc(id)}</div>
           <div class="path">${esc(p.root)}</div>
           <div class="pstats"><span><b>${hist.length}</b> tasks</span><span><b>${hist.reduce((a,t)=>a+((t.editedFiles||[]).length),0)}</b> edits</span><span>last ${last}</span></div>
+          <div class="pfoot">${portChip}${openBtn}</div>
         </div>`;
       }).join('');
     }
@@ -289,6 +311,18 @@
         $('cliPill').innerHTML = `<span class="d"></span> ${s.cliAvailable ? 'CLI '+esc(s.cliVersion||'ready') : 'CLI not found'}`;
       } catch { $('cliPill').className='pill bad'; }
     }
+    async function loadPortStatus() {
+      try {
+        const arr = await (await fetch('/projects/status')).json();
+        arr.forEach(s=>{ const p=state.projects[s.id]; if(p){ if(s.origin) p.origin=s.origin; p.up=s.up; } });
+        renderProjects();
+      } catch {}
+    }
+    // Open a project's running page in a new tab.
+    $('projects').addEventListener('click', (e)=>{
+      const b = e.target.closest('button.open');
+      if (b && b.dataset.origin) window.open(b.dataset.origin, '_blank', 'noopener');
+    });
 
     // ---- Live SSE ----
     let es;
@@ -298,9 +332,11 @@
         const d = JSON.parse(e.data);
         state.server = d.server || {}; state.stats = d.stats || {};
         if (state.stats.uptimeMs) state.server.startedAt = Date.now() - state.stats.uptimeMs;
-        state.projects = {}; (d.projects||[]).forEach(p=>state.projects[p.id]=p);
+        const merged = {}; (d.projects||[]).forEach(p=>{ merged[p.id]=Object.assign(state.projects[p.id]||{}, p); });
+        state.projects = merged;
         state.active = new Map((d.activeTasks||[]).map(t=>[t.id,t]));
         setConn(true); renderLive(); renderProjects(); renderKpis(); renderChart();
+        loadPortStatus();
       });
       const upd = (e)=>{ const t=JSON.parse(e.data); state.active.set(t.id,t); renderLive(); renderKpis(); };
       es.addEventListener('task:start', (e)=>{ upd(e); const t=JSON.parse(e.data); toast(`▶ task started · <span class="mono">${esc(t.project)}</span>`); });
@@ -313,7 +349,7 @@
       });
       es.addEventListener('task:remove', (e)=>{ const {id}=JSON.parse(e.data); state.active.delete(id); renderLive(); renderKpis(); });
       es.addEventListener('reload', (e)=>{ const d=JSON.parse(e.data); toast(`↻ file changed · <span class="mono">${esc(d.project||'')}</span>`); });
-      es.addEventListener('project', (e)=>{ const p=JSON.parse(e.data); state.projects[p.id]=p; renderProjects(); toast(`＋ project registered · <span class="mono">${esc(p.id)}</span>`); });
+      es.addEventListener('project', (e)=>{ const p=JSON.parse(e.data); const had=!!state.projects[p.id]; state.projects[p.id]=Object.assign(state.projects[p.id]||{}, p); renderProjects(); loadPortStatus(); if(!had) toast(`＋ project registered · <span class="mono">${esc(p.id)}</span>`); });
       es.onerror = ()=>{ setConn(false); };
       es.onopen = ()=> setConn(true);
     }
@@ -324,9 +360,10 @@
 
     // ---- boot ----
     connect();
-    loadStatus(); loadHistory();
+    loadStatus(); loadHistory(); loadPortStatus();
     setInterval(tickElapsed, 1000);
     setInterval(loadStatus, 10000);
+    setInterval(loadPortStatus, 5000);
     setInterval(()=>{ renderKpis(); }, 5000);
   </script>
 </body>
