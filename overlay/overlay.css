@@ -203,10 +203,13 @@ body.ave-pushed {
 #ave-sidebar .ave-sb-dot.bad { background: #f87171; }
 #ave-sidebar .ave-sb-title { font-weight: 700; }
 #ave-sidebar .ave-sb-project { font: 11px ui-monospace, Menlo, monospace; color: #93c5fd; margin-left: 2px; }
+#ave-sidebar .ave-sb-clear,
 #ave-sidebar .ave-sb-min {
-  margin-left: auto; background: none; border: none; color: #9a9aa3;
-  font-size: 18px; cursor: pointer; line-height: 1;
+  background: none; border: none; color: #9a9aa3; cursor: pointer; line-height: 1;
 }
+#ave-sidebar .ave-sb-clear { margin-left: auto; font-size: 14px; }
+#ave-sidebar .ave-sb-min { font-size: 18px; }
+#ave-sidebar .ave-sb-clear:hover,
 #ave-sidebar .ave-sb-min:hover { color: #fff; }
 
 #ave-sidebar .ave-sb-msgs {

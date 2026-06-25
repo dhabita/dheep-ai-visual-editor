@@ -8,8 +8,36 @@ let aveFab = null;         // floating toggle button
 let aveSbSession = null;   // CLI session id → continues the conversation
 let aveSbAttached = null;  // element context attached to the next message
 let aveSbBusy = false;
+let aveChatLog = [];        // persisted transcript: [{role, text, ctx?, trace:[{t,cls}], files?}]
+let aveCurAssistant = null; // current streaming assistant entry within aveChatLog
+let avePendingReload = false; // hot-reload deferred until the active task finishes
+let aveSaveTimer = null;
+const AVE_MAX_MSGS = 200;
 
 function aveSbCfg() { return window.__AVE_CONFIG__ || {}; }
+
+/* ---- persistence: keep chat + context across page/hot reloads ---- */
+function aveStoreKey() { return 'ave-chat:' + (aveSbCfg().projectId || 'default'); }
+function aveSaveState() {
+  try {
+    localStorage.setItem(aveStoreKey(), JSON.stringify({
+      v: 1,
+      sessionId: aveSbSession,
+      attached: aveSbAttached,
+      open: aveSb ? aveSb.classList.contains('open') : true,
+      messages: aveChatLog.slice(-AVE_MAX_MSGS),
+    }));
+  } catch (e) { /* storage unavailable / full — ignore */ }
+}
+function aveSaveThrottled() {
+  if (aveSaveTimer) return;
+  aveSaveTimer = setTimeout(() => { aveSaveTimer = null; aveSaveState(); }, 300);
+}
+function aveLoadState() {
+  try { return JSON.parse(localStorage.getItem(aveStoreKey()) || 'null'); }
+  catch { return null; }
+}
+function aveClearState() { try { localStorage.removeItem(aveStoreKey()); } catch {} }
 
 function aveInitSidebar() {
   if (document.getElementById('ave-sidebar')) return;
@@ -33,6 +61,7 @@ function aveInitSidebar() {
       <span class="ave-sb-dot"></span>
       <span class="ave-sb-title">AI Editor</span>
       <span class="ave-sb-project">${cfg.projectId ? aveSbEsc(cfg.projectId) : ''}</span>
+      <button class="ave-sb-clear" title="Clear chat">⌫</button>
       <button class="ave-sb-min" title="Minimize">—</button>
     </div>
     <div class="ave-sb-msgs"></div>
@@ -48,6 +77,7 @@ function aveInitSidebar() {
   mount.appendChild(aveSb);
 
   aveSb.querySelector('.ave-sb-min').onclick = () => aveToggleSidebar(false);
+  aveSb.querySelector('.ave-sb-clear').onclick = aveSbClear;
   aveSb.querySelector('.ave-sb-send').onclick = aveSbSend;
   aveSb.querySelector('.ave-sb-pick').onclick = aveSbTogglePick;
 
@@ -60,9 +90,30 @@ function aveInitSidebar() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aveSbSend(); }
   });
 
-  aveSbHint('Pick an element or just describe what you want to change.');
+  // Restore the previous conversation + context (survives page/hot reloads).
+  const saved = aveLoadState();
+  if (saved && Array.isArray(saved.messages) && saved.messages.length) {
+    aveSbSession = saved.sessionId || null;
+    aveChatLog = saved.messages;
+    aveRenderLog();
+    if (saved.attached) aveRestoreAttachment(saved.attached);
+  } else {
+    aveSbHint('Pick an element or just describe what you want to change.');
+  }
   aveCheckServer();
-  aveToggleSidebar(true); // show on load when the script is served (server online)
+  aveToggleSidebar(!(saved && saved.open === false)); // default open
+}
+
+function aveSbClear() {
+  aveChatLog = [];
+  aveSbSession = null;
+  aveSbAttached = null;
+  aveCurAssistant = null;
+  aveClearState();
+  aveSb.querySelector('.ave-sb-chip').hidden = true;
+  aveSbMsgs().innerHTML = '';
+  aveSbHint('Pick an element or just describe what you want to change.');
+  aveSbStatus('Cleared');
 }
 
 function aveToggleSidebar(open) {
@@ -73,6 +124,7 @@ function aveToggleSidebar(open) {
   document.body.classList.add('ave-push-anim');
   document.body.classList.toggle('ave-pushed', open);
   if (open) setTimeout(() => aveSb.querySelector('.ave-sb-input')?.focus(), 180);
+  aveSaveState();
 }
 
 /** Toggle the element picker from the sidebar button (delegates to overlay.js). */
@@ -83,18 +135,23 @@ function aveSbTogglePick() {
   aveSbStatus(willActivate ? 'Pick an element on the page…' : '');
 }
 
-/** Called by overlay.js when an element is clicked in picker mode. */
-function aveAttachElement(ctx) {
+/** Show the attached-element chip (used both on click and on restore). */
+function aveRestoreAttachment(ctx) {
   aveSbAttached = ctx;
   const chip = aveSb.querySelector('.ave-sb-chip');
   chip.hidden = false;
   chip.innerHTML = `<span class="chip-sel" title="${aveSbEsc(ctx.selector)}">◳ ${aveSbEsc(ctx.selector)}</span><button title="Detach">✕</button>`;
-  chip.querySelector('button').onclick = () => { aveSbAttached = null; chip.hidden = true; };
+  chip.querySelector('button').onclick = () => { aveSbAttached = null; chip.hidden = true; aveSaveState(); };
+}
 
+/** Called by overlay.js when an element is clicked in picker mode. */
+function aveAttachElement(ctx) {
+  aveRestoreAttachment(ctx);
   aveSetActive(false); // turn picker off so the page is usable
   aveSb.querySelector('.ave-sb-pick').classList.remove('active');
   aveToggleSidebar(true);
   aveSbStatus('Element attached — describe the change.');
+  aveSaveState();
 }
 
 async function aveCheckServer() {
@@ -162,6 +219,16 @@ async function aveSbSend() {
   await aveSbConsume(res.body, bubble);
   aveSbBusy = false;
   aveSbSetBusy(false);
+  aveSaveState();
+  aveMaybeReload(); // a hot-reload may have been deferred while we were streaming
+}
+
+/** Run a reload that was deferred until the task finished (see overlay.js). */
+function aveMaybeReload() {
+  if (avePendingReload) {
+    avePendingReload = false;
+    setTimeout(() => location.reload(), 250); // let the final save flush
+  }
 }
 
 /** Parse the SSE stream into the assistant bubble. */
@@ -188,6 +255,8 @@ async function aveSbConsume(body, bubble) {
 
       if (event === 'text' && data.delta) {
         md.textContent += data.delta;
+        if (aveCurAssistant) aveCurAssistant.text = md.textContent;
+        aveSaveThrottled();
       } else if (event === 'tool') {
         aveSbTrace(bubble, `› ${data.name} ${aveSbToolArg(data.input)}`, 't-tool');
       } else if (event === 'edited') {
@@ -197,11 +266,17 @@ async function aveSbConsume(body, bubble) {
       } else if (event === 'done') {
         if (data.sessionId) aveSbSession = data.sessionId;
         if (!md.textContent.trim() && data.summary) md.textContent = data.summary;
+        if (aveCurAssistant) {
+          aveCurAssistant.text = md.textContent;
+          aveCurAssistant.files = data.editedFiles || [];
+        }
         aveSbStatus(data.editedFiles && data.editedFiles.length
           ? `Done ✓ — edited ${data.editedFiles.join(', ')}` : 'Done ✓', 'ok');
+        aveSaveState();
       } else if (event === 'error') {
         aveSbTrace(bubble, '✗ ' + (data.message || 'error'), 't-err');
         aveSbStatus('Error', 'err');
+        aveSaveState();
       }
       aveSbScroll();
     }
@@ -212,20 +287,51 @@ async function aveSbConsume(body, bubble) {
 function aveSbMsgs() { return aveSb.querySelector('.ave-sb-msgs'); }
 function aveSbScroll() { const m = aveSbMsgs(); m.scrollTop = m.scrollHeight; }
 
-function aveSbAddUser(text, ctx) {
+/** Build a DOM bubble from a stored message object. */
+function aveMsgEl(msg) {
   const el = document.createElement('div');
-  el.className = 'ave-msg user';
-  el.innerHTML = (ctx ? `<div class="ave-ctxnote">◳ ${aveSbEsc(ctx.selector)}</div>` : '') + aveSbEsc(text);
-  aveSbMsgs().appendChild(el);
+  if (msg.role === 'user') {
+    el.className = 'ave-msg user';
+    el.innerHTML = (msg.ctx ? `<div class="ave-ctxnote">◳ ${aveSbEsc(msg.ctx.selector)}</div>` : '') + aveSbEsc(msg.text);
+    return el;
+  }
+  el.className = 'ave-msg assistant';
+  el.innerHTML = `<div class="ave-md"></div><div class="ave-trace"></div>`;
+  el.querySelector('.ave-md').textContent = msg.text || '';
+  const trace = el.querySelector('.ave-trace');
+  (msg.trace || []).forEach((t) => {
+    const line = document.createElement('div');
+    if (t.cls) line.className = t.cls;
+    line.textContent = t.t;
+    trace.appendChild(line);
+  });
+  return el;
+}
+
+/** Re-render the whole transcript from aveChatLog (used on restore). */
+function aveRenderLog() {
+  const m = aveSbMsgs();
+  m.innerHTML = '';
+  aveChatLog.forEach((msg) => m.appendChild(aveMsgEl(msg)));
   aveSbScroll();
 }
 
+function aveSbAddUser(text, ctx) {
+  const msg = { role: 'user', text, ctx: ctx || null };
+  aveChatLog.push(msg);
+  aveSbMsgs().appendChild(aveMsgEl(msg));
+  aveSbScroll();
+  aveSaveState();
+}
+
 function aveSbAddAssistant() {
-  const el = document.createElement('div');
-  el.className = 'ave-msg assistant';
-  el.innerHTML = `<div class="ave-md"></div><div class="ave-trace"></div>`;
+  const msg = { role: 'assistant', text: '', trace: [], files: [] };
+  aveChatLog.push(msg);
+  aveCurAssistant = msg;
+  const el = aveMsgEl(msg);
   aveSbMsgs().appendChild(el);
   aveSbScroll();
+  aveSaveState();
   return el;
 }
 
@@ -235,6 +341,11 @@ function aveSbTrace(bubble, text, cls) {
   if (cls) line.className = cls;
   line.textContent = text;
   trace.appendChild(line);
+  if (aveCurAssistant) {
+    aveCurAssistant.trace = aveCurAssistant.trace || [];
+    aveCurAssistant.trace.push({ t: text, cls: cls || '' });
+    aveSaveThrottled();
+  }
 }
 
 function aveSbHint(text) {

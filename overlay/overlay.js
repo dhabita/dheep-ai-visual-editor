@@ -143,6 +143,13 @@ document.addEventListener('keydown', (e) => {
       try {
         const data = JSON.parse(msg.data);
         if (data.type === 'reload') {
+          // Defer reload while a chat task is streaming, so we don't drop the
+          // rest of the stream (final summary + session id) and can persist it.
+          if (typeof aveSbBusy !== 'undefined' && aveSbBusy) {
+            avePendingReload = true;
+            console.log('[AVE] change during task — reload deferred until done');
+            return;
+          }
           console.log('[AVE] reloading after change:', data.file);
           location.reload();
         }

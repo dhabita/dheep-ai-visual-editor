@@ -67,6 +67,7 @@ It's local-first, framework-agnostic, and free to run if you already have a Clau
 - 🧠 **Powered by Claude Code** — the AI edits real source files with its own `Read`/`Edit`/`Write` tools.
 - 🔑 **No API key needed** — uses your local `claude` CLI login (subscription), so nothing is billed per token by this tool and no secrets are stored.
 - ⚡ **Instant hot reload** — `chokidar` watches your files and reloads the browser the moment a change lands.
+- 💾 **Persistent chat & context** — the conversation, session, and attached element survive page/hot reloads (saved per project in `localStorage`); reloads are deferred until a task finishes so nothing is lost mid-stream.
 - 🗂️ **Multi-project** — one server edits many projects in different folders, in parallel, each isolated.
 - 🧩 **Framework-agnostic** — plain HTML, Vite, Next.js, React (CRA), Astro, SvelteKit, Nuxt, and more. Drop in one `<script>` tag (dev only).
 - 🪶 **Tiny & dependency-light** — a small Express server and a single injected JS bundle. No build step.
@@ -132,6 +133,7 @@ Open **http://localhost:3000** (or your `SERVER_PORT`) for the dashboard: live s
 - **Just chat** — describe any change to the whole page and send.
 - **Target an element** — click **◎** in the sidebar (or press **Ctrl+Shift+E**), hover (blue highlight), then click the element. Its selector attaches as a chip to your next message.
 - **Keep the thread going** — say *"now center it"* or *"undo that"*; the session remembers context.
+- **History survives reloads** — when the page hot-reloads after an edit, the chat and attached context are restored from `localStorage`. Use the **⌫** button to clear the thread.
 - Status dot shows server/CLI health; each message streams Claude's tool activity (`› Read`, `✎ edited styles.css`) and a summary.
 
 ## Multiple projects at once
