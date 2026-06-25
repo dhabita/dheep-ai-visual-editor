@@ -155,9 +155,17 @@
 #ave-fab:hover { transform: scale(1.07); }
 #ave-fab.hide { opacity: 0; pointer-events: none; transform: scale(0.6); }
 
-/* Push the page left so the sidebar never covers content. */
-html.ave-push-anim { transition: margin-right 0.18s ease; }
-html.ave-pushed { margin-right: min(380px, 92vw) !important; }
+/* Push the page left so the sidebar never covers content — including the
+   site's position:fixed / sticky header. The transform turns <body> into the
+   containing block for its fixed descendants, so they shrink with body's width.
+   Our own overlay UI is mounted on <html> (outside body) so it stays
+   viewport-fixed and is unaffected. */
+body.ave-push-anim { transition: margin-right 0.18s ease; }
+body.ave-pushed {
+  margin-right: min(380px, 92vw) !important;
+  transform: translateZ(0);
+  min-height: 100vh;
+}
 
 #ave-sidebar {
   position: fixed;

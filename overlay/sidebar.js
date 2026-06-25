@@ -15,12 +15,16 @@ function aveInitSidebar() {
   if (document.getElementById('ave-sidebar')) return;
   const cfg = aveSbCfg();
 
+  // Mount our UI on <html> (not <body>) so it stays viewport-fixed even when
+  // <body> gets a transform to push its content left.
+  const mount = document.documentElement;
+
   aveFab = document.createElement('button');
   aveFab.id = 'ave-fab';
   aveFab.title = 'AI Visual Editor';
   aveFab.textContent = '✦';
   aveFab.onclick = () => aveToggleSidebar(true);
-  document.body.appendChild(aveFab);
+  mount.appendChild(aveFab);
 
   aveSb = document.createElement('aside');
   aveSb.id = 'ave-sidebar';
@@ -41,7 +45,7 @@ function aveInitSidebar() {
       </div>
       <div class="ave-sb-status"></div>
     </div>`;
-  document.body.appendChild(aveSb);
+  mount.appendChild(aveSb);
 
   aveSb.querySelector('.ave-sb-min').onclick = () => aveToggleSidebar(false);
   aveSb.querySelector('.ave-sb-send').onclick = aveSbSend;
@@ -65,9 +69,9 @@ function aveToggleSidebar(open) {
   if (!aveSb) return;
   aveSb.classList.toggle('open', open);
   aveFab.classList.toggle('hide', open);
-  // Push the page left instead of covering it.
-  document.documentElement.classList.add('ave-push-anim');
-  document.documentElement.classList.toggle('ave-pushed', open);
+  // Push the page (body) left instead of covering it.
+  document.body.classList.add('ave-push-anim');
+  document.body.classList.toggle('ave-pushed', open);
   if (open) setTimeout(() => aveSb.querySelector('.ave-sb-input')?.focus(), 180);
 }
 

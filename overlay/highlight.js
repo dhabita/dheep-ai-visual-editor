@@ -5,15 +5,16 @@ let aveHighlightEl = null;
 let aveLabelEl = null;
 
 function aveEnsureHighlightEls() {
+  // Mount on <html> so these stay viewport-fixed even when <body> is transformed.
   if (!aveHighlightEl) {
     aveHighlightEl = document.createElement('div');
     aveHighlightEl.id = 'ave-highlight';
-    document.body.appendChild(aveHighlightEl);
+    document.documentElement.appendChild(aveHighlightEl);
   }
   if (!aveLabelEl) {
     aveLabelEl = document.createElement('div');
     aveLabelEl.id = 'ave-label';
-    document.body.appendChild(aveLabelEl);
+    document.documentElement.appendChild(aveLabelEl);
   }
 }
 
