@@ -135,7 +135,8 @@ Open **http://localhost:3000** (or your `SERVER_PORT`) for the **live dashboard*
 - **Just chat** — describe any change to the whole page and send.
 - **Target an element** — click **◎** in the sidebar (or press **Ctrl+Shift+E**), hover (blue highlight), then click the element. Its selector attaches as a chip to your next message.
 - **Keep the thread going** — say *"now center it"* or *"undo that"*; the session remembers context.
-- **History survives reloads** — when the page hot-reloads after an edit, the chat and attached context are restored from `localStorage`. Use the **⌫** button to clear the thread.
+- **History survives reloads** — when the page hot-reloads after an edit, the chat and attached context are restored from `localStorage`.
+- **Multiple chats per project** — hit **＋** to start a new chat with a fresh Claude context (useful when the context meter fills up), and open the **🕘** history menu to switch between past chats or delete them permanently.
 - Status dot shows server/CLI health; each message streams Claude's tool activity (`› Read`, `✎ edited styles.css`) and a summary.
 - **Context meter** (above the input) shows how full the conversation context is — e.g. `context 78% · 156k/200k · $0.420` — turning amber past 70% and red past 90%. When the CLI auto-compacts a long conversation, a `🗜 context auto-compacted` line appears. Hit **⌫** to start fresh if you want a smaller context.
 

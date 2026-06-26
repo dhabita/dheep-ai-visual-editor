@@ -14,6 +14,8 @@ let avePendingReload = false; // hot-reload deferred until the active task finis
 let aveSaveTimer = null;
 let aveSbUsage = null;       // last context-window usage {contextTokens, contextWindow, pct, costUsd}
 let aveSbModel = null;       // model alias the sidebar sends with each task
+let aveThreads = { activeId: null, threads: [] }; // per-project chat threads
+let aveActiveId = null;      // id of the active thread
 const AVE_MAX_MSGS = 200;
 // Models the picker offers. Labels are cosmetic; values must match the
 // server's ALLOWED_MODELS. /status may narrow/confirm this list at runtime.
@@ -25,29 +27,56 @@ const AVE_MODELS = [
 
 function aveSbCfg() { return window.__AVE_CONFIG__ || {}; }
 
-/* ---- persistence: keep chat + context across page/hot reloads ---- */
-function aveStoreKey() { return 'ave-chat:' + (aveSbCfg().projectId || 'default'); }
-function aveSaveState() {
+/* ---- persistence: one project keeps multiple chat threads ---- */
+function aveThreadsKey() { return 'ave-threads:' + (aveSbCfg().projectId || 'default'); }
+function aveLegacyKey() { return 'ave-chat:' + (aveSbCfg().projectId || 'default'); }
+function aveNewId() { return 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36); }
+function aveThreadTitle(msgs) {
+  const first = (msgs || []).find((m) => m.role === 'user');
+  const t = first ? String(first.text || '').replace(/\s+/g, ' ').trim() : '';
+  return t ? (t.length > 42 ? t.slice(0, 42) + '…' : t) : 'New chat';
+}
+function aveBlankThread() {
+  return { id: aveNewId(), title: 'New chat', sessionId: null, messages: [], usage: null, attached: null, open: true, updatedAt: Date.now() };
+}
+function aveSaveThreads() { try { localStorage.setItem(aveThreadsKey(), JSON.stringify(aveThreads)); } catch {} }
+function aveActiveThread() { return aveThreads.threads.find((x) => x.id === aveActiveId) || null; }
+
+/** Load all threads for this project (migrating the old single-chat store). */
+function aveLoadThreads() {
   try {
-    localStorage.setItem(aveStoreKey(), JSON.stringify({
-      v: 1,
-      sessionId: aveSbSession,
-      attached: aveSbAttached,
-      usage: aveSbUsage,
-      open: aveSb ? aveSb.classList.contains('open') : true,
-      messages: aveChatLog.slice(-AVE_MAX_MSGS),
-    }));
-  } catch (e) { /* storage unavailable / full — ignore */ }
+    const raw = localStorage.getItem(aveThreadsKey());
+    if (raw) { const s = JSON.parse(raw); if (s && Array.isArray(s.threads)) return s; }
+  } catch {}
+  try { // migrate legacy single chat
+    const old = JSON.parse(localStorage.getItem(aveLegacyKey()) || 'null');
+    if (old && Array.isArray(old.messages) && old.messages.length) {
+      const t = { id: aveNewId(), title: aveThreadTitle(old.messages), sessionId: old.sessionId || null,
+        messages: old.messages, usage: old.usage || null, attached: old.attached || null, open: old.open !== false, updatedAt: Date.now() };
+      return { activeId: t.id, threads: [t] };
+    }
+  } catch {}
+  return { activeId: null, threads: [] };
+}
+
+/** Persist the current working state into the active thread. */
+function aveSaveState() {
+  const t = aveActiveThread();
+  if (!t) return;
+  t.messages = aveChatLog.slice(-AVE_MAX_MSGS);
+  t.sessionId = aveSbSession;
+  t.usage = aveSbUsage;
+  t.attached = aveSbAttached;
+  t.open = aveSb ? aveSb.classList.contains('open') : true;
+  t.title = aveThreadTitle(aveChatLog);
+  t.updatedAt = Date.now();
+  aveThreads.activeId = aveActiveId;
+  aveSaveThreads();
 }
 function aveSaveThrottled() {
   if (aveSaveTimer) return;
   aveSaveTimer = setTimeout(() => { aveSaveTimer = null; aveSaveState(); }, 300);
 }
-function aveLoadState() {
-  try { return JSON.parse(localStorage.getItem(aveStoreKey()) || 'null'); }
-  catch { return null; }
-}
-function aveClearState() { try { localStorage.removeItem(aveStoreKey()); } catch {} }
 
 /* Model choice persists separately so clearing the chat keeps it. */
 function aveModelKey() { return 'ave-model:' + (aveSbCfg().projectId || 'default'); }
@@ -79,8 +108,13 @@ function aveInitSidebar() {
       <select class="ave-sb-model" title="Model Claude uses for edits">
         ${AVE_MODELS.map((m) => `<option value="${aveSbEsc(m.value)}">${aveSbEsc(m.label)}</option>`).join('')}
       </select>
-      <button class="ave-sb-clear" title="Clear chat">⌫</button>
+      <button class="ave-sb-new" title="New chat (fresh context)">＋</button>
+      <button class="ave-sb-hist" title="Chat history">🕘</button>
       <button class="ave-sb-min" title="Minimize">—</button>
+    </div>
+    <div class="ave-sb-histmenu" hidden>
+      <div class="ave-hm-head"><span>Chats</span><button class="ave-hm-close" title="Close">×</button></div>
+      <div class="ave-hm-list"></div>
     </div>
     <div class="ave-sb-msgs"></div>
     <div class="ave-sb-foot">
@@ -99,7 +133,15 @@ function aveInitSidebar() {
   mount.appendChild(aveSb);
 
   aveSb.querySelector('.ave-sb-min').onclick = () => aveToggleSidebar(false);
-  aveSb.querySelector('.ave-sb-clear').onclick = aveSbClear;
+  aveSb.querySelector('.ave-sb-new').onclick = aveNewChat;
+  aveSb.querySelector('.ave-sb-hist').onclick = aveToggleHistoryMenu;
+  aveSb.querySelector('.ave-hm-close').onclick = aveCloseHistoryMenu;
+  aveSb.querySelector('.ave-hm-list').addEventListener('click', (e) => {
+    const del = e.target.closest('.ave-hm-del');
+    if (del) { e.stopPropagation(); aveDeleteThread(del.dataset.id); return; }
+    const item = e.target.closest('.ave-hm-item');
+    if (item) aveSwitchThread(item.dataset.id);
+  });
   aveSb.querySelector('.ave-sb-send').onclick = aveSbSend;
   aveSb.querySelector('.ave-sb-pick').onclick = aveSbTogglePick;
 
@@ -123,32 +165,88 @@ function aveInitSidebar() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aveSbSend(); }
   });
 
-  // Restore the previous conversation + context (survives page/hot reloads).
-  const saved = aveLoadState();
-  if (saved && Array.isArray(saved.messages) && saved.messages.length) {
-    aveSbSession = saved.sessionId || null;
-    aveChatLog = saved.messages;
-    aveRenderLog();
-    if (saved.attached) aveRestoreAttachment(saved.attached);
-    if (saved.usage) aveSbSetUsage(saved.usage);
-  } else {
-    aveSbHint('Pick an element or just describe what you want to change.');
-  }
+  // Load chat threads for this project and restore the active one.
+  aveThreads = aveLoadThreads();
+  if (!aveThreads.threads.length) { const t = aveBlankThread(); aveThreads = { activeId: t.id, threads: [t] }; }
+  aveActiveId = aveThreads.activeId || aveThreads.threads[0].id;
+  aveSaveThreads();
+  const active = aveActiveThread();
+  aveLoadActiveIntoUI();
   aveCheckServer();
-  aveToggleSidebar(!(saved && saved.open === false)); // default open
+  aveToggleSidebar(!(active && active.open === false)); // default open
 }
 
-function aveSbClear() {
-  aveChatLog = [];
-  aveSbSession = null;
-  aveSbAttached = null;
+/** Load the active thread's transcript/session/context into the UI. */
+function aveLoadActiveIntoUI() {
+  const t = aveActiveThread();
+  aveChatLog = (t && t.messages) || [];
+  aveSbSession = (t && t.sessionId) || null;
+  aveSbAttached = (t && t.attached) || null;
   aveCurAssistant = null;
-  aveSbSetUsage(null);
-  aveClearState();
-  aveSb.querySelector('.ave-sb-chip').hidden = true;
+  const chip = aveSb.querySelector('.ave-sb-chip');
+  if (aveSbAttached) aveRestoreAttachment(aveSbAttached); else chip.hidden = true;
   aveSbMsgs().innerHTML = '';
-  aveSbHint('Pick an element or just describe what you want to change.');
-  aveSbStatus('Cleared');
+  if (aveChatLog.length) aveRenderLog();
+  else aveSbHint('Describe a change, or pick an element. This is a fresh context.');
+  aveSbSetUsage((t && t.usage) || null);
+}
+
+/** Start a brand-new chat with a fresh Claude context. */
+function aveNewChat() {
+  aveSaveState();
+  const t = aveBlankThread();
+  aveThreads.threads.unshift(t);
+  aveActiveId = t.id; aveThreads.activeId = t.id;
+  aveLoadActiveIntoUI();
+  aveSaveThreads();
+  aveCloseHistoryMenu();
+  aveSbStatus('New chat — fresh context');
+  setTimeout(() => aveSb.querySelector('.ave-sb-input')?.focus(), 50);
+}
+
+function aveSwitchThread(id) {
+  if (id === aveActiveId) { aveCloseHistoryMenu(); return; }
+  aveSaveState();
+  aveActiveId = id; aveThreads.activeId = id;
+  aveLoadActiveIntoUI();
+  aveSaveThreads();
+  aveCloseHistoryMenu();
+}
+
+/** Permanently delete a chat thread. */
+function aveDeleteThread(id) {
+  const t = aveThreads.threads.find((x) => x.id === id);
+  if (!t) return;
+  if (!confirm('Delete this chat permanently?\n\n' + (t.title || 'New chat'))) return;
+  aveThreads.threads = aveThreads.threads.filter((x) => x.id !== id);
+  if (id === aveActiveId) {
+    if (!aveThreads.threads.length) aveThreads.threads.push(aveBlankThread());
+    aveActiveId = aveThreads.threads[0].id; aveThreads.activeId = aveActiveId;
+    aveLoadActiveIntoUI();
+  }
+  aveSaveThreads();
+  aveRenderHistoryMenu();
+}
+
+function aveRenderHistoryMenu() {
+  const list = aveSb.querySelector('.ave-hm-list');
+  if (!aveThreads.threads.length) { list.innerHTML = '<div class="ave-hm-empty">No chats yet</div>'; return; }
+  const sorted = aveThreads.threads.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  list.innerHTML = sorted.map((t) => `
+    <div class="ave-hm-item ${t.id === aveActiveId ? 'active' : ''}" data-id="${aveSbEsc(t.id)}">
+      <span class="ave-hm-title">${aveSbEsc(t.title || 'New chat')}</span>
+      <button class="ave-hm-del" data-id="${aveSbEsc(t.id)}" title="Delete permanently">×</button>
+    </div>`).join('');
+}
+
+function aveToggleHistoryMenu() {
+  const m = aveSb.querySelector('.ave-sb-histmenu');
+  if (m.hasAttribute('hidden')) { aveRenderHistoryMenu(); m.removeAttribute('hidden'); }
+  else m.setAttribute('hidden', '');
+}
+function aveCloseHistoryMenu() {
+  const m = aveSb.querySelector('.ave-sb-histmenu');
+  if (m) m.setAttribute('hidden', '');
 }
 
 function aveToggleSidebar(open) {

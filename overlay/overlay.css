@@ -225,6 +225,35 @@ body.ave-pushed {
 #ave-sidebar .ave-sb-clear:hover,
 #ave-sidebar .ave-sb-min:hover { color: #fff; }
 
+#ave-sidebar .ave-sb-new,
+#ave-sidebar .ave-sb-hist {
+  background: none; border: none; color: #9a9aa3; cursor: pointer; line-height: 1; font-size: 15px;
+}
+#ave-sidebar .ave-sb-new:hover,
+#ave-sidebar .ave-sb-hist:hover { color: #fff; }
+
+/* Chat history dropdown */
+#ave-sidebar .ave-sb-histmenu {
+  position: absolute; top: 46px; right: 10px; width: 250px; max-height: 52vh; overflow-y: auto;
+  background: #22222c; border: 1px solid #34343d; border-radius: 10px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55); z-index: 5; padding: 6px;
+}
+#ave-sidebar .ave-hm-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 6px 8px; color: #9a9aa3; font-size: 12px;
+}
+#ave-sidebar .ave-hm-close { background: none; border: none; color: #9a9aa3; cursor: pointer; font-size: 16px; line-height: 1; }
+#ave-sidebar .ave-hm-close:hover { color: #fff; }
+#ave-sidebar .ave-hm-item {
+  display: flex; align-items: center; gap: 6px; padding: 7px 8px; border-radius: 7px; cursor: pointer;
+}
+#ave-sidebar .ave-hm-item:hover { background: #2c2c38; }
+#ave-sidebar .ave-hm-item.active { background: #2b2b53; }
+#ave-sidebar .ave-hm-title { flex: 1; font-size: 12.5px; color: #e7e7ea; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#ave-sidebar .ave-hm-del { background: none; border: none; color: #9a9aa3; cursor: pointer; font-size: 15px; opacity: 0.6; line-height: 1; }
+#ave-sidebar .ave-hm-del:hover { color: #f87171; opacity: 1; }
+#ave-sidebar .ave-hm-empty { color: #6b6b76; text-align: center; padding: 12px; font-size: 12px; }
+
 #ave-sidebar .ave-sb-msgs {
   flex: 1;
   overflow-y: auto;
