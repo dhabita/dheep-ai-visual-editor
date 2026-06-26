@@ -7,7 +7,7 @@ import net from 'node:net';
 import express from 'express';
 import cors from 'cors';
 
-import { runTask } from './claude.js';
+import { runTask, ALLOWED_MODELS, DEFAULT_MODEL } from './claude.js';
 import { startHotReload } from './hotreload.js';
 import { readTasks, appendTask } from './utils.js';
 import {
@@ -186,7 +186,7 @@ app.get('/bookmarklet.js', (req, res) => {
 
 // List registered projects.
 app.get('/projects', (req, res) => {
-  res.json([...projects.values()].map((p) => ({ id: p.id, root: p.root, origin: p.origin || null })));
+  res.json([...projects.values()].map((p) => ({ id: p.id, root: p.root, origin: p.origin || null, hasSession: !!p.lastSession })));
 });
 
 // Probe each project's dev-server port and report whether it's live.
@@ -229,7 +229,8 @@ app.get('/status', (req, res) => {
       ok: true,
       projects: [...projects.values()].map((p) => ({ id: p.id, root: p.root })),
       workspaceRoots: getWorkspaceRoots(),
-      model: process.env.CLAUDE_MODEL || 'sonnet',
+      model: DEFAULT_MODEL,
+      models: ALLOWED_MODELS,
       wsPort: WS_PORT,
       cliAvailable: !err,
       cliVersion: err ? null : String(stdout).trim(),
@@ -248,11 +249,13 @@ app.get('/history', (req, res) => {
  * show Claude's progress live.
  */
 app.post('/task', async (req, res) => {
-  const { prompt, context, projectId, sessionId } = req.body || {};
+  const { prompt, context, projectId, sessionId, model } = req.body || {};
   if (!prompt || !prompt.trim()) {
     res.status(400).json({ error: 'Missing prompt.' });
     return;
   }
+  // Pick the requested model when it's one we allow; otherwise the default.
+  const chosenModel = ALLOWED_MODELS.includes(model) ? model : DEFAULT_MODEL;
 
   // Resolve which project folder this task targets (auto-discovering if needed).
   let project = null;
@@ -285,6 +288,7 @@ app.post('/task', async (req, res) => {
     id: taskId,
     project: project.id,
     prompt: prompt.slice(0, 240),
+    model: chosenModel,
     selector: context?.selector || null,
     startedAt: Date.now(),
     status: 'running',
@@ -320,11 +324,16 @@ app.post('/task', async (req, res) => {
   const startedAt = new Date().toISOString();
   emit('start', { startedAt, project: project.id });
 
+  // Continue the project's last conversation when the caller (e.g. the
+  // dashboard) doesn't supply its own session id.
+  const useSession = sessionId || project.lastSession || undefined;
+
   try {
     const { summary, editedFiles, sessionId: newSession, usage } = await runTask(
-      { prompt, context, projectRoot: project.root, sessionId },
+      { prompt, context, projectRoot: project.root, sessionId: useSession, model: chosenModel },
       emit
     );
+    if (newSession) project.lastSession = newSession;
 
     appendTask({
       time: startedAt,

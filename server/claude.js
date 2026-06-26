@@ -8,6 +8,11 @@ import { buildPrompt } from './utils.js';
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || 'claude';
 const MODEL = process.env.CLAUDE_MODEL || 'sonnet'; // alias → latest Sonnet
+
+// Models the sidebar may pick from. Anything else falls back to MODEL so a
+// crafted request can't pass arbitrary flags through to the CLI.
+export const ALLOWED_MODELS = ['sonnet', 'opus', 'haiku'];
+export const DEFAULT_MODEL = ALLOWED_MODELS.includes(MODEL) ? MODEL : 'sonnet';
 const PERMISSION_MODE = process.env.PERMISSION_MODE || 'acceptEdits';
 const TIMEOUT_MS = Number(process.env.TASK_TIMEOUT_MS || 240000);
 
@@ -25,15 +30,18 @@ const SYSTEM_PROMPT = `You are editing files in a live web project.
  * `emit(event, data)` forwards progress to the browser over SSE.
  * Returns { summary, editedFiles }.
  */
-export function runTask({ prompt, context, projectRoot, sessionId }, emit) {
+export function runTask({ prompt, context, projectRoot, sessionId, model }, emit) {
   if (!projectRoot) throw new Error('runTask requires a projectRoot.');
   const fullPrompt = buildPrompt({ prompt, context }, projectRoot);
+
+  // Honour the sidebar's model choice, but only from the known-safe list.
+  const chosenModel = ALLOWED_MODELS.includes(model) ? model : DEFAULT_MODEL;
 
   const args = [
     '-p', fullPrompt,
     '--output-format', 'stream-json',
     '--verbose',
-    '--model', MODEL,
+    '--model', chosenModel,
     '--permission-mode', PERMISSION_MODE,
     '--allowedTools', ...ALLOWED_TOOLS,
     '--append-system-prompt', SYSTEM_PROMPT,

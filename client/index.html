@@ -127,7 +127,44 @@
       box-shadow: 0 10px 30px rgba(0,0,0,0.4); animation: rise 0.2s ease; }
     .toast .mono { color: var(--brand2); }
 
-    @media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, 1fr); } .hrow { grid-template-columns: 1fr; } }
+    .hrow { cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease; }
+    .hrow:hover { border-color: #3a3a52; background: #191921; }
+    button.chat { cursor: pointer; font: 600 12px -apple-system, sans-serif; background: var(--panel2); color: var(--ink); border: 1px solid var(--line); border-radius: 7px; padding: 6px 12px; }
+    button.chat:hover { border-color: var(--brand); color: var(--brand2); }
+
+    /* Chat panel (continue a project's conversation from the dashboard) */
+    #backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 55; display: none; }
+    #backdrop.show { display: block; }
+    #chat {
+      position: fixed; top: 0; right: 0; width: 440px; max-width: 94vw; height: 100vh; z-index: 60;
+      background: #13131a; border-left: 1px solid var(--line); box-shadow: -16px 0 50px rgba(0,0,0,0.5);
+      display: flex; flex-direction: column; transform: translateX(100%); transition: transform 0.2s ease;
+    }
+    #chat.open { transform: none; }
+    #chat .chead { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); background: #181820; }
+    #chat .chead .pid { font-weight: 700; }
+    #chat .chead .cport { font: 11px ui-monospace, Menlo, monospace; color: var(--muted); }
+    #chat .chead .x { margin-left: auto; background: none; border: none; color: var(--muted); font-size: 22px; cursor: pointer; line-height: 1; }
+    #chat .chead .x:hover { color: #fff; }
+    #chat .cmsgs { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    #chat .cm { max-width: 92%; }
+    #chat .cm.user { align-self: flex-end; background: var(--brand); color: #fff; padding: 9px 13px; border-radius: 12px 12px 4px 12px; white-space: pre-wrap; word-break: break-word; }
+    #chat .cm.assistant { align-self: flex-start; background: var(--panel2); border: 1px solid var(--line); padding: 9px 13px; border-radius: 12px 12px 12px 4px; }
+    #chat .cm .md { white-space: pre-wrap; word-break: break-word; }
+    #chat .cm .files { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 5px; }
+    #chat .cm .trace { margin-top: 6px; font: 11.5px/1.5 ui-monospace, Menlo, monospace; color: #8a8a98; white-space: pre-wrap; word-break: break-word; }
+    #chat .cmuted { color: var(--muted); text-align: center; font-size: 12.5px; padding: 10px; }
+    #chat .cfoot { border-top: 1px solid var(--line); padding: 12px; background: #181820; }
+    #chat .cmeter { height: 4px; border-radius: 999px; background: #262631; overflow: hidden; margin-bottom: 8px; display: none; }
+    #chat .cmeter.show { display: block; } #chat .cmeter > i { display: block; height: 100%; width: 0; background: var(--ok); transition: width 0.3s ease; }
+    #chat .crow { display: flex; gap: 8px; align-items: flex-end; background: #0f0f15; border: 1px solid var(--line); border-radius: 10px; padding: 6px; }
+    #chat .crow:focus-within { border-color: var(--brand); }
+    #chat textarea { flex: 1; resize: none; max-height: 140px; background: transparent; border: none; outline: none; color: var(--ink); font: inherit; padding: 6px; }
+    #chat .send { background: var(--brand); color: #fff; border: none; border-radius: 8px; width: 34px; height: 34px; cursor: pointer; font-size: 16px; }
+    #chat .send:disabled { opacity: 0.5; cursor: default; }
+    #chat .cstatus { font-size: 11.5px; color: var(--muted); margin-top: 6px; min-height: 14px; }
+
+    @media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
   </style>
 </head>
 <body>
@@ -162,6 +199,24 @@
   </main>
 
   <div id="toasts"></div>
+
+  <div id="backdrop"></div>
+  <aside id="chat">
+    <div class="chead">
+      <span class="pid" id="cPid"></span>
+      <span class="cport" id="cPort"></span>
+      <button class="x" id="cClose" title="Close">×</button>
+    </div>
+    <div class="cmsgs" id="cMsgs"></div>
+    <div class="cfoot">
+      <div class="cmeter" id="cMeter"><i></i></div>
+      <div class="crow">
+        <textarea id="cInput" rows="1" placeholder="Continue the conversation… (Enter to send)"></textarea>
+        <button class="send" id="cSend" title="Send">↑</button>
+      </div>
+      <div class="cstatus" id="cStatus"></div>
+    </div>
+  </aside>
 
   <script>
     const $ = (id) => document.getElementById(id);
@@ -261,7 +316,7 @@
           <div class="id"><span class="d" style="width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block"></span> ${esc(id)}</div>
           <div class="path">${esc(p.root)}</div>
           <div class="pstats"><span><b>${hist.length}</b> tasks</span><span><b>${hist.reduce((a,t)=>a+((t.editedFiles||[]).length),0)}</b> edits</span><span>last ${last}</span></div>
-          <div class="pfoot">${portChip}${openBtn}</div>
+          <div class="pfoot">${portChip}<button class="chat" data-project="${esc(id)}">💬 Chat</button>${openBtn}</div>
         </div>`;
       }).join('');
     }
@@ -284,7 +339,7 @@
       if (!rows.length) { el.innerHTML = '<div class="empty">No tasks yet.</div>'; return; }
       el.innerHTML = rows.map(t=>{
         const files = (t.editedFiles||[]).map(f=>`<span class="file-chip">✎ ${esc(f)}</span>`).join('');
-        return `<div class="hrow">
+        return `<div class="hrow" data-project="${esc(t.project||'')}" title="Open chat to continue this project's conversation">
           <div class="when"><span class="chip">${esc(t.project||'—')}</span> ${esc(new Date(t.time).toLocaleString())} · ${ago(new Date(t.time).getTime())}</div>
           <div class="p">${esc(t.prompt)}</div>
           ${t.summary?`<div class="s">${esc(t.summary)}</div>`:''}
@@ -357,6 +412,100 @@
       const p=$('connPill'); p.className='pill '+(on?'ok':'bad');
       p.innerHTML = `<span class="d ${on?'':'pulse'}"></span> ${on?'live':'reconnecting…'}`;
     }
+
+    // ---- Chat panel: continue a project's conversation ----
+    let chatProject = null, chatBusy = false;
+    async function openChat(projectId) {
+      if (!projectId) return;
+      chatProject = projectId;
+      const p = state.projects[projectId] || {};
+      $('cPid').textContent = projectId;
+      $('cPort').textContent = (()=>{ try { return p.origin ? ':'+(new URL(p.origin).port||'80') : ''; } catch { return ''; } })();
+      $('cMeter').classList.remove('show'); $('cStatus').textContent = '';
+      $('chat').classList.add('open'); $('backdrop').classList.add('show');
+      await renderTranscript();
+      setTimeout(()=>$('cInput').focus(), 160);
+    }
+    function closeChat() { $('chat').classList.remove('open'); $('backdrop').classList.remove('show'); }
+
+    async function renderTranscript() {
+      const el = $('cMsgs');
+      el.innerHTML = '<div class="cmuted">loading conversation…</div>';
+      let rows = [];
+      try { rows = await (await fetch('/history?project='+encodeURIComponent(chatProject))).json(); } catch {}
+      rows = rows.slice().reverse(); // oldest → newest
+      el.innerHTML = rows.map(t=>{
+        const files = (t.editedFiles||[]).map(f=>`<span class="file-chip">✎ ${esc(f)}</span>`).join('');
+        return `<div class="cm user">${esc(t.prompt)}</div>` +
+          (t.summary ? `<div class="cm assistant"><div class="md">${esc(t.summary)}</div>${files?`<div class="files">${files}</div>`:''}</div>` : '');
+      }).join('') || '<div class="cmuted">No messages yet. Start the conversation below — it continues the project\'s Claude session.</div>';
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function addAssistantBubble() {
+      const d = document.createElement('div'); d.className = 'cm assistant';
+      d.innerHTML = '<div class="md"></div><div class="trace"></div>';
+      $('cMsgs').appendChild(d); $('cMsgs').scrollTop = $('cMsgs').scrollHeight; return d;
+    }
+    function setChatMeter(u) {
+      if (!u || u.pct==null) return;
+      const m = $('cMeter'); m.classList.add('show');
+      const i = m.querySelector('i'); i.style.width = Math.max(2,u.pct)+'%';
+      i.style.background = u.pct>=90?'var(--err)':u.pct>=70?'var(--warn)':'var(--ok)';
+      $('cStatus').textContent = `context ${u.pct}% · ${fmtTok(u.contextTokens)}/${fmtTok(u.contextWindow)}` + (u.costUsd!=null?` · ${fmtCost(u.costUsd)}`:'');
+    }
+
+    async function sendChat() {
+      if (chatBusy || !chatProject) return;
+      const inp = $('cInput'); const prompt = inp.value.trim(); if (!prompt) return;
+      const u = document.createElement('div'); u.className='cm user'; u.textContent = prompt; $('cMsgs').appendChild(u);
+      inp.value=''; inp.style.height='auto';
+      const bubble = addAssistantBubble();
+      chatBusy = true; $('cSend').disabled = true; $('cStatus').textContent = 'Claude is working…';
+      let res;
+      try {
+        res = await fetch('/task', { method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ prompt, projectId: chatProject }) }); // server continues the project's last session
+      } catch { bubble.querySelector('.trace').textContent = '✗ server offline'; chatBusy=false; $('cSend').disabled=false; return; }
+      if (!res.ok || !res.body) { let m='Request failed'; try{const j=await res.json(); m=j.error||m;}catch{} bubble.querySelector('.trace').textContent='✗ '+m; $('cStatus').textContent=m; chatBusy=false; $('cSend').disabled=false; return; }
+      await consumeChat(res.body, bubble);
+      chatBusy=false; $('cSend').disabled=false;
+    }
+
+    async function consumeChat(body, bubble) {
+      const reader = body.getReader(), dec = new TextDecoder(); let buf='';
+      const md = bubble.querySelector('.md'), trace = bubble.querySelector('.trace');
+      const addLine = (t)=>{ trace.textContent += (trace.textContent?'\n':'')+t; $('cMsgs').scrollTop=$('cMsgs').scrollHeight; };
+      while (true) {
+        const { value, done } = await reader.read(); if (done) break;
+        buf += dec.decode(value, {stream:true});
+        let i; while ((i=buf.indexOf('\n\n'))!==-1) {
+          const chunk = buf.slice(0,i); buf = buf.slice(i+2);
+          const ev = (chunk.match(/^event: (.+)$/m)||[])[1]; const dm = chunk.match(/^data: (.+)$/m); if (!dm) continue;
+          let d={}; try { d = JSON.parse(dm[1]); } catch {}
+          if (ev==='text' && d.delta) md.textContent += d.delta;
+          else if (ev==='tool') addLine('› '+d.name+' '+((d.input&&(d.input.file_path||d.input.path||d.input.pattern))?'('+(d.input.file_path||d.input.path||d.input.pattern)+')':''));
+          else if (ev==='edited') addLine('✎ edited '+d.file);
+          else if (ev==='compacted') addLine('🗜 context auto-compacted');
+          else if (ev==='usage') setChatMeter(d);
+          else if (ev==='done') { if(d.usage) setChatMeter(d.usage); if(!md.textContent.trim()&&d.summary) md.textContent=d.summary;
+            $('cStatus').textContent = 'Done ✓' + ((d.editedFiles||[]).length?' — '+d.editedFiles.join(', '):''); loadHistory(); }
+          else if (ev==='error') { addLine('✗ '+(d.message||'error')); $('cStatus').textContent='Error'; }
+          $('cMsgs').scrollTop = $('cMsgs').scrollHeight;
+        }
+      }
+    }
+
+    $('cClose').onclick = closeChat;
+    $('backdrop').onclick = closeChat;
+    $('cSend').onclick = sendChat;
+    $('cInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendChat(); } });
+    $('cInput').addEventListener('input', ()=>{ const i=$('cInput'); i.style.height='auto'; i.style.height=Math.min(i.scrollHeight,140)+'px'; });
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeChat(); });
+    // Click a recent task → open chat for its project.
+    $('history').addEventListener('click', (e)=>{ const row=e.target.closest('.hrow'); if(row&&row.dataset.project) openChat(row.dataset.project); });
+    // Chat button on project cards (delegated alongside Open).
+    $('projects').addEventListener('click', (e)=>{ const b=e.target.closest('button.chat'); if(b&&b.dataset.project) openChat(b.dataset.project); });
 
     // ---- boot ----
     connect();

@@ -207,7 +207,20 @@ body.ave-pushed {
 #ave-sidebar .ave-sb-min {
   background: none; border: none; color: #9a9aa3; cursor: pointer; line-height: 1;
 }
-#ave-sidebar .ave-sb-clear { margin-left: auto; font-size: 14px; }
+#ave-sidebar .ave-sb-model {
+  margin-left: auto;
+  background: #15151a;
+  color: #c8c8d0;
+  border: 1px solid #34343d;
+  border-radius: 6px;
+  padding: 3px 6px;
+  font: 11.5px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  cursor: pointer;
+  outline: none;
+}
+#ave-sidebar .ave-sb-model:hover { border-color: #4f46e5; }
+#ave-sidebar .ave-sb-model:focus { border-color: #6366f1; }
+#ave-sidebar .ave-sb-clear { font-size: 14px; }
 #ave-sidebar .ave-sb-min { font-size: 18px; }
 #ave-sidebar .ave-sb-clear:hover,
 #ave-sidebar .ave-sb-min:hover { color: #fff; }

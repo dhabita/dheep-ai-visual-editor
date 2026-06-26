@@ -13,7 +13,15 @@ let aveCurAssistant = null; // current streaming assistant entry within aveChatL
 let avePendingReload = false; // hot-reload deferred until the active task finishes
 let aveSaveTimer = null;
 let aveSbUsage = null;       // last context-window usage {contextTokens, contextWindow, pct, costUsd}
+let aveSbModel = null;       // model alias the sidebar sends with each task
 const AVE_MAX_MSGS = 200;
+// Models the picker offers. Labels are cosmetic; values must match the
+// server's ALLOWED_MODELS. /status may narrow/confirm this list at runtime.
+const AVE_MODELS = [
+  { value: 'sonnet', label: 'Sonnet' },
+  { value: 'opus', label: 'Opus' },
+  { value: 'haiku', label: 'Haiku' },
+];
 
 function aveSbCfg() { return window.__AVE_CONFIG__ || {}; }
 
@@ -41,6 +49,11 @@ function aveLoadState() {
 }
 function aveClearState() { try { localStorage.removeItem(aveStoreKey()); } catch {} }
 
+/* Model choice persists separately so clearing the chat keeps it. */
+function aveModelKey() { return 'ave-model:' + (aveSbCfg().projectId || 'default'); }
+function aveLoadModel() { try { return localStorage.getItem(aveModelKey()) || null; } catch { return null; } }
+function aveSaveModel(m) { try { localStorage.setItem(aveModelKey(), m); } catch {} }
+
 function aveInitSidebar() {
   if (document.getElementById('ave-sidebar')) return;
   const cfg = aveSbCfg();
@@ -63,6 +76,9 @@ function aveInitSidebar() {
       <span class="ave-sb-dot"></span>
       <span class="ave-sb-title">AI Editor</span>
       <span class="ave-sb-project">${cfg.projectId ? aveSbEsc(cfg.projectId) : ''}</span>
+      <select class="ave-sb-model" title="Model Claude uses for edits">
+        ${AVE_MODELS.map((m) => `<option value="${aveSbEsc(m.value)}">${aveSbEsc(m.label)}</option>`).join('')}
+      </select>
       <button class="ave-sb-clear" title="Clear chat">⌫</button>
       <button class="ave-sb-min" title="Minimize">—</button>
     </div>
@@ -86,6 +102,17 @@ function aveInitSidebar() {
   aveSb.querySelector('.ave-sb-clear').onclick = aveSbClear;
   aveSb.querySelector('.ave-sb-send').onclick = aveSbSend;
   aveSb.querySelector('.ave-sb-pick').onclick = aveSbTogglePick;
+
+  // Model picker — remember the choice per project, independent of the chat.
+  const modelSel = aveSb.querySelector('.ave-sb-model');
+  aveSbModel = aveLoadModel();
+  if (aveSbModel) modelSel.value = aveSbModel;
+  aveSbModel = modelSel.value; // fall back to the first option if saved value is gone
+  modelSel.onchange = () => {
+    aveSbModel = modelSel.value;
+    aveSaveModel(aveSbModel);
+    aveSbStatus('Model: ' + (modelSel.options[modelSel.selectedIndex]?.text || aveSbModel));
+  };
 
   const input = aveSb.querySelector('.ave-sb-input');
   input.addEventListener('input', () => {
@@ -162,12 +189,30 @@ function aveAttachElement(ctx) {
   aveSaveState();
 }
 
+/** Reconcile the model picker with the server's allowed list + default. */
+function aveSyncModels(models, defaultModel) {
+  const sel = aveSb && aveSb.querySelector('.ave-sb-model');
+  if (!sel) return;
+  if (Array.isArray(models) && models.length) {
+    const label = (v) => (AVE_MODELS.find((m) => m.value === v)?.label) || (v.charAt(0).toUpperCase() + v.slice(1));
+    sel.innerHTML = models
+      .map((v) => `<option value="${aveSbEsc(v)}">${aveSbEsc(label(v))}</option>`)
+      .join('');
+  }
+  const saved = aveLoadModel();
+  const has = (v) => v && [...sel.options].some((o) => o.value === v);
+  // Saved choice wins; otherwise follow the server default.
+  sel.value = has(saved) ? saved : (has(defaultModel) ? defaultModel : sel.options[0]?.value || '');
+  aveSbModel = sel.value;
+}
+
 async function aveCheckServer() {
   const dot = aveSb.querySelector('.ave-sb-dot');
   try {
     const r = await fetch((aveSbCfg().serverUrl || '') + '/status');
     const s = await r.json();
     dot.className = 'ave-sb-dot ' + (s.cliAvailable ? 'ok' : 'bad');
+    aveSyncModels(s.models, s.model);
     aveSbStatus(s.cliAvailable ? 'Ready' : 'Claude CLI not found on the server', s.cliAvailable ? 'ok' : 'err');
   } catch {
     dot.className = 'ave-sb-dot bad';
@@ -206,6 +251,7 @@ async function aveSbSend() {
         context: ctx || undefined,
         projectId: cfg.projectId || null,
         sessionId: aveSbSession || undefined,
+        model: aveSbModel || undefined,
       }),
     });
   } catch {
