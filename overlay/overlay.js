@@ -161,4 +161,34 @@ document.addEventListener('keydown', (e) => {
   }
 })();
 
+// ---- 500 reporter — nudge the editor to auto-recover a broken dev server ----
+(function aveWatchErrors() {
+  const cfg = window.__AVE_CONFIG__ || {};
+  if (!cfg.serverUrl || !cfg.projectId) return;
+  let lastReport = 0;
+  function report(url, status) {
+    const now = Date.now();
+    if (now - lastReport < 10000) return; // throttle client-side too
+    lastReport = now;
+    try {
+      fetch(cfg.serverUrl + '/report-error', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: cfg.projectId, url: String(url), status }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch { /* ignore */ }
+  }
+  const origFetch = window.fetch;
+  window.fetch = function (...args) {
+    return origFetch.apply(this, args).then((res) => {
+      try {
+        const u = new URL(res.url, location.href);
+        if (u.origin === location.origin && res.status >= 500) report(res.url, res.status);
+      } catch { /* ignore */ }
+      return res;
+    });
+  };
+})();
+
 console.log('%c[AVE] AI Visual Editor loaded — press Ctrl+Shift+E to start', 'color:#3b82f6;font-weight:bold');
