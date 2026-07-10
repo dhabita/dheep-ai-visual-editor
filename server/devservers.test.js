@@ -12,6 +12,7 @@ import {
   buildDevCommand,
   getFreePort,
   probeHttpStatus,
+  createDevManager,
 } from './devservers.js';
 
 function tmpProject(files) {
@@ -77,4 +78,39 @@ test('probeHttpStatus returns the status code of a reachable server', async () =
 test('probeHttpStatus returns null when nothing is listening', async () => {
   const status = await probeHttpStatus('http://localhost:1/', 300);
   assert.equal(status, null);
+});
+
+test('DevManager start/restart/stop drives a child dev server', async () => {
+  // A project whose "dev script" is a 1-line node http server on $PORT.
+  const dir = tmpProject({
+    'package.json': JSON.stringify({
+      scripts: { dev: 'node server.js' },
+    }),
+    'server.js':
+      "require('http').createServer((q,s)=>{s.end('ok')}).listen(process.env.PORT||0,()=>console.log('ready'))",
+  });
+  const projects = new Map([['demo', { id: 'demo', root: dir }]]);
+  const events = [];
+  const mgr = createDevManager({
+    projects,
+    runTask: async () => ({ summary: 'fixed', editedFiles: [] }),
+    broadcast: (e, d) => events.push({ e, d }),
+  });
+
+  // Force the port via env since this stub reads process.env.PORT.
+  const port = await getFreePort();
+  projects.get('demo').origin = `http://localhost:${port}`;
+
+  const view = await mgr.start('demo', { port });
+  assert.equal(view.managed, true);
+  assert.equal(view.running, true);
+  assert.equal(view.port, port);
+
+  const status = await probeHttpStatus(`http://localhost:${port}/`);
+  assert.equal(status, 200);
+
+  await mgr.stop('demo');
+  assert.equal(mgr.status('demo').running, false);
+
+  mgr.shutdownAll();
 });
