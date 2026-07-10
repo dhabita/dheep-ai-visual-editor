@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fsp from 'node:fs/promises';
-import { listProjectFiles } from './utils.js';
+import { listProjectFiles, detectProjectInfo } from './utils.js';
 
 // Pre-search: find likely source files for a clicked element BEFORE spawning
 // Claude, so the prompt can point at candidates instead of making the model
@@ -114,4 +114,28 @@ export async function findCandidateFiles(projectRoot, context = {}, { maxCandida
   } catch {
     return []; // pre-search must never block a task
   }
+}
+
+/**
+ * One-call intel gathering for a task: candidate files, project type, and —
+ * only when no candidates were found — a short file summary to orient Claude.
+ * Never rejects.
+ */
+export async function prepareTaskIntel(projectRoot, context = {}) {
+  const candidates = await findCandidateFiles(projectRoot, context);
+  let fileSummary = [];
+  if (!candidates.length) {
+    try {
+      fileSummary = await listProjectFiles(projectRoot, { maxEntries: 40 });
+    } catch {
+      fileSummary = [];
+    }
+  }
+  let projectInfo = null;
+  try {
+    projectInfo = detectProjectInfo(projectRoot);
+  } catch {
+    projectInfo = null;
+  }
+  return { candidates, projectInfo, fileSummary };
 }
