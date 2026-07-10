@@ -2,7 +2,7 @@
 
 Salin seluruh isi file ini ke Claude Code (atau Claude chat di VS Code) **di dalam project yang ingin kamu edit secara visual**. Claude akan memasang overlay-nya sendiri ke project ini.
 
-> Sebelum mulai: isi dua nilai `CONFIG` di bawah. Kalau kamu lupa, Claude akan bertanya.
+> Tidak perlu mengisi apa pun: Claude mendeteksi `CONFIG` sendiri dan hanya bertanya kalau deteksinya gagal.
 
 ---
 
@@ -15,11 +15,18 @@ Overlay = satu file JS yang disajikan oleh server editor yang berjalan terpisah 
 localhost. Project ini hanya perlu MEMUAT script itu saat development. Tidak ada
 package yang perlu di-install di project ini.
 
-## CONFIG (saya isi — kalau kosong, TANYAKAN ke saya dulu sebelum lanjut)
-- EDITOR_URL  = http://localhost:3000     # alamat server AI Visual Editor (port SERVER_PORT-nya)
-- PROJECT_ID  = <nama-folder-project-ini> # WAJIB sama dengan nama folder project ini,
-                                          # supaya server bisa auto-discovery (mis. folder
-                                          # "ssc-landing-next" → PROJECT_ID "ssc-landing-next")
+## CONFIG (opsional — deteksi otomatis dulu, hanya tanya kalau gagal)
+- EDITOR_URL  = http://localhost:3000
+- PROJECT_ID  = (auto)
+
+Deteksi otomatis SEBELUM bertanya apa pun:
+1. PROJECT_ID: jalankan `basename "$(pwd)"` — nama folder project ini ADALAH
+   PROJECT_ID (server menemukan folder lewat auto-discovery berdasarkan nama).
+2. EDITOR_URL: coba `curl -s --max-time 3 http://localhost:3000/status`.
+   - Kalau balasannya JSON dengan "ok":true → pakai http://localhost:3000.
+   - Kalau gagal → TANYAKAN ke saya di port berapa server editor berjalan
+     (atau minta saya menjalankan `npm start` di repo editor dulu).
+Hanya bertanya kalau salah satu deteksi di atas gagal.
 
 ## YANG HARUS KAMU LAKUKAN
 
@@ -38,7 +45,17 @@ package yang perlu di-install di project ini.
 
 4) Jangan mengubah hal lain. Jangan menghapus kode yang tidak diminta.
 
-5) Setelah selesai, cetak ringkasan:
+5) VERIFIKASI pemasangan sebelum melapor selesai:
+   - Jalankan: curl -s --max-time 3 "EDITOR_URL/overlay.js?project=PROJECT_ID" | head -c 100
+   - Sukses = balasannya JavaScript yang diawali komentar "AI Visual Editor overlay bundle".
+   - Kalau GAGAL, diagnosis dan laporkan mana yang terjadi:
+     a. Server editor tidak jalan → minta saya `npm start` di repo editor.
+     b. Port salah → cocokkan EDITOR_URL dengan SERVER_PORT di .env editor.
+     c. Folder project di luar workspace editor → jalankan `pwd`, cetak path
+        absolutnya, dan beri tahu saya untuk menambahkannya ke WORKSPACE_ROOTS
+        di .env editor atau mendaftarkannya via POST /register {id, root}.
+
+6) Setelah selesai, cetak ringkasan:
    - file mana yang kamu ubah,
    - cara memakai: cukup jalankan dev server project ini lalu buka di browser.
      TIDAK perlu menyentuh server editor — project ini akan TERDAFTAR OTOMATIS
@@ -122,7 +139,29 @@ Sebelum `</body>`:
     });
     </script>
 
-### I. Stack lain
+### I2. Remix (`app/root.tsx`)
+Di dalam <body> (mis. setelah {children}), render dev-only:
+    {process.env.NODE_ENV === 'development' && (
+      <script src="EDITOR_URL/overlay.js?project=PROJECT_ID" />
+    )}
+
+### I3. Angular (`src/main.ts`)
+    import { isDevMode } from '@angular/core';
+    // ...setelah bootstrap:
+    if (isDevMode()) {
+      const s = document.createElement('script');
+      s.src = 'EDITOR_URL/overlay.js?project=PROJECT_ID';
+      document.body.appendChild(s);
+    }
+
+### I4. SolidStart (`src/entry-client.tsx`)
+    if (import.meta.env.DEV) {
+      const s = document.createElement('script');
+      s.src = 'EDITOR_URL/overlay.js?project=PROJECT_ID';
+      document.body.appendChild(s);
+    }
+
+### Z. Stack lain
 Pakai pola umum yang sama: pada saat halaman dimuat di DEVELOPMENT, buat elemen
 <script> dengan src = EDITOR_URL + "/overlay.js?project=" + PROJECT_ID dan tambahkan
 ke document.body. Pastikan dijaga agar tidak masuk ke production.
@@ -136,6 +175,12 @@ ke document.body. Pastikan dijaga agar tidak masuk ke production.
   menulis kode (jangan biarkan literal "EDITOR_URL"/"PROJECT_ID").
 - Kalau project ini tidak punya satu pun titik entry yang jelas, tanyakan ke saya
   file mana yang dimuat di setiap halaman.
+- MONOREPO: PROJECT_ID = nama folder PACKAGE yang di-serve (mis. `apps/web` →
+  "web"), bukan nama root repo. Kalau nama package tidak unik di workspace,
+  beri tahu saya supaya saya daftarkan manual via POST /register.
+- UNINSTALL: untuk melepas editor, hapus blok/snippet yang memuat
+  "overlay.js?project=" dari file yang kamu ubah (cari string itu) — tidak ada
+  jejak lain di project ini.
 ```
 
 ---
