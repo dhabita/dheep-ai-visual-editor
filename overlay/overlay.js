@@ -65,16 +65,99 @@ function aveGuessFile(el) {
   return p.replace(/^\//, '');
 }
 
+/** Distinctive element text — the strongest search signal. */
+function aveCollectText(el) {
+  const t = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+  return t.slice(0, 200);
+}
+
+/** Compact ancestor chain, e.g. "main.content > section.hero". */
+function aveParentChain(el, levels = 3) {
+  const parts = [];
+  let node = el.parentElement;
+  while (node && node !== document.body && parts.length < levels) {
+    let part = node.tagName.toLowerCase();
+    const cls = Array.from(node.classList)
+      .filter((c) => !c.startsWith('ave-'))
+      .slice(0, 2);
+    if (cls.length) part += '.' + cls.join('.');
+    parts.unshift(part);
+    node = node.parentElement;
+  }
+  return parts.join(' > ');
+}
+
+/** Notable attributes that help locate the source. */
+function aveCollectAttrs(el) {
+  const out = {};
+  for (const name of ['href', 'src', 'alt', 'aria-label', 'title', 'placeholder', 'type', 'name']) {
+    const v = el.getAttribute && el.getAttribute(name);
+    if (v) out[name] = String(v).slice(0, 120);
+  }
+  for (const a of el.attributes || []) {
+    if (a.name.startsWith('data-') && a.name !== 'data-file' && Object.keys(out).length < 12) {
+      out[a.name] = String(a.value).slice(0, 120);
+    }
+  }
+  return out;
+}
+
+/** Best-effort source file/line from framework dev-mode metadata. */
+function aveSourceHint(el) {
+  try {
+    // React (dev builds): walk the fiber tree for _debugSource.
+    for (const key of Object.keys(el)) {
+      if (!key.startsWith('__reactFiber$')) continue;
+      let fiber = el[key];
+      for (let i = 0; fiber && i < 10; i++) {
+        const src = fiber._debugSource;
+        if (src && src.fileName) return { file: String(src.fileName), line: src.lineNumber || null };
+        fiber = fiber.return;
+      }
+    }
+  } catch { /* ignore */ }
+  try {
+    // Svelte (dev builds)
+    const meta = el.__svelte_meta;
+    if (meta && meta.loc && meta.loc.file) return { file: String(meta.loc.file), line: meta.loc.line || null };
+  } catch { /* ignore */ }
+  try {
+    // Vue (dev builds)
+    const comp = el.__vueParentComponent;
+    const file = comp && comp.type && comp.type.__file;
+    if (file) return { file: String(file), line: null };
+  } catch { /* ignore */ }
+  return null;
+}
+
+/** Which framework rendered this page (best effort). */
+function aveDetectFramework(el) {
+  try {
+    if (window.__NEXT_DATA__ || window.next) return 'next';
+    if (window.__NUXT__ || window.useNuxtApp) return 'nuxt';
+    if (document.querySelector('[data-sveltekit-preload-data]')) return 'sveltekit';
+    if (document.querySelector('astro-island, [data-astro-cid]')) return 'astro';
+    if (el && Object.keys(el).some((k) => k.startsWith('__reactFiber$'))) return 'react';
+    if (el && el.__vueParentComponent) return 'vue';
+  } catch { /* ignore */ }
+  return null;
+}
+
 /** Collect everything Claude needs about the clicked element. */
 function aveCollectContext(el) {
   let html = el.outerHTML || '';
-  if (html.length > 500) html = html.slice(0, 500) + '…(truncated)';
+  if (html.length > 2000) html = html.slice(0, 2000) + '…(truncated)';
   return {
     selector: aveGetSelector(el),
     classList: Array.from(el.classList).filter((c) => !c.startsWith('ave-')),
     html,
     css: aveCollectCss(el),
     file: aveGuessFile(el),
+    text: aveCollectText(el),
+    parents: aveParentChain(el),
+    attrs: aveCollectAttrs(el),
+    sourceHint: aveSourceHint(el),
+    framework: aveDetectFramework(el),
   };
 }
 
