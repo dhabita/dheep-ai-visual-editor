@@ -21,6 +21,8 @@ const ALLOWED_TOOLS = ['Read', 'Edit', 'Write', 'MultiEdit', 'Glob', 'Grep'];
 
 const SYSTEM_PROMPT = `You are editing files in a live web project.
 - Edit files directly. Never ask for confirmation — just make the change.
+- The prompt may include "Candidate source files" found by an automatic pre-search. Start from the top candidate, but VERIFY the file really contains the clicked element (match its text, classes, or structure) before editing.
+- If no candidate matches, locate the source yourself with Grep/Glob using the element's text and class names.
 - Never delete or rewrite code you were not asked to touch. Make the smallest edit that satisfies the task.
 - Read a file before editing it so your changes are precise.
 - When done, reply with a 1-2 sentence summary of exactly what you changed.`;
@@ -30,9 +32,9 @@ const SYSTEM_PROMPT = `You are editing files in a live web project.
  * `emit(event, data)` forwards progress to the browser over SSE.
  * Returns { summary, editedFiles }.
  */
-export function runTask({ prompt, context, projectRoot, sessionId, model }, emit) {
+export function runTask({ prompt, context, intel, projectRoot, sessionId, model }, emit) {
   if (!projectRoot) throw new Error('runTask requires a projectRoot.');
-  const fullPrompt = buildPrompt({ prompt, context }, projectRoot);
+  const fullPrompt = buildPrompt({ prompt, context, intel }, projectRoot);
 
   // Honour the sidebar's model choice, but only from the known-safe list.
   const chosenModel = ALLOWED_MODELS.includes(model) ? model : DEFAULT_MODEL;

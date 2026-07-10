@@ -11,6 +11,7 @@ import { runTask, ALLOWED_MODELS, DEFAULT_MODEL } from './claude.js';
 import { startHotReload } from './hotreload.js';
 import { createDevManager, probeHttpStatus } from './devservers.js';
 import { readTasks, appendTask } from './utils.js';
+import { prepareTaskIntel } from './search.js';
 import {
   loadProjects,
   discoverProject,
@@ -363,13 +364,19 @@ app.post('/task', async (req, res) => {
   const startedAt = new Date().toISOString();
   emit('start', { startedAt, project: project.id });
 
+  // Pre-search candidate files + detect framework. Fail-open by design.
+  const intel = await prepareTaskIntel(project.root, context || {});
+  if (intel.candidates.length) {
+    emit('tool', { name: 'pre-search', input: { file_path: intel.candidates[0].file } });
+  }
+
   // Continue the project's last conversation when the caller (e.g. the
   // dashboard) doesn't supply its own session id.
   const useSession = sessionId || project.lastSession || undefined;
 
   try {
     const { summary, editedFiles, sessionId: newSession, usage } = await runTask(
-      { prompt, context, projectRoot: project.root, sessionId: useSession, model: chosenModel },
+      { prompt, context, intel, projectRoot: project.root, sessionId: useSession, model: chosenModel },
       emit
     );
     if (newSession) project.lastSession = newSession;
