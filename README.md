@@ -66,6 +66,7 @@ It's local-first, framework-agnostic, and free to run if you already have a Clau
 - 🖱️ **Click-to-edit overlay** — Figma-style blue highlight on hover; click any element to target it.
 - 💬 **Chat sidebar (vibe coding)** — a docked AI chat panel right on your page, with streaming responses and a persistent conversation.
 - 🧠 **Powered by Claude Code** — the AI edits real source files with its own `Read`/`Edit`/`Write` tools.
+- 🎯 **Smart source discovery** — before Claude even starts, the server pre-searches your project for the clicked element (its text, id, classes, and framework dev-source hints) and hands Claude ranked candidate files with line numbers, so it edits the right file on the first try.
 - 🔑 **No API key needed** — uses your local `claude` CLI login (subscription), so nothing is billed per token by this tool and no secrets are stored.
 - ⚡ **Instant hot reload** — `chokidar` watches your files and reloads the browser the moment a change lands.
 - 💾 **Persistent chat & context** — the conversation, session, and attached element survive page/hot reloads (saved per project in `localStorage`); reloads are deferred until a task finishes so nothing is lost mid-stream.
@@ -79,8 +80,9 @@ It's local-first, framework-agnostic, and free to run if you already have a Clau
 
 1. You open your site in the browser with a one-line overlay `<script>` (dev only).
 2. The overlay renders a **chat sidebar**. You type a request (optionally after clicking an element to attach it as context).
-3. The browser sends the request to the local server (`POST /task`) over **Server-Sent Events**.
-4. The server spawns the **Claude Code CLI** in headless mode with your project as the working directory:
+3. The browser sends the request to the local server (`POST /task`) over **Server-Sent Events**. The overlay attaches rich element context: distinctive text, ancestor chain, attributes, computed styles, and — in dev builds of React/Svelte/Vue — the exact source file and line.
+4. The server **pre-searches** the project for that element (matching its text, id, and classes; utility classes like Tailwind's are automatically demoted) and detects the framework and styling system from `package.json`. The top candidate files, with line numbers, go into the prompt.
+5. The server spawns the **Claude Code CLI** in headless mode with your project as the working directory:
 
    ```bash
    claude -p "<your request + element context>" \
@@ -90,8 +92,8 @@ It's local-first, framework-agnostic, and free to run if you already have a Clau
      --append-system-prompt "<editing rules>"
    ```
 
-5. Claude reads and edits the real files. The server streams its progress back into the sidebar.
-6. `chokidar` detects the file change and tells the browser to reload over WebSocket. **You see the change immediately.**
+6. Claude reads and edits the real files. The server streams its progress back into the sidebar.
+7. `chokidar` detects the file change and tells the browser to reload over WebSocket. **You see the change immediately.**
 
 The conversation continues across messages (the server resumes the same Claude session), so follow-ups like *"now make it bigger"* just work.
 
@@ -202,7 +204,7 @@ Want to use it on an existing app? Two options:
 javascript:(function(){var s=document.createElement('script');s.src='http://localhost:3000/overlay.js?project=my-app&t='+Date.now();document.body.appendChild(s);})();
 ```
 
-**3. Let AI install it for you** — copy [`prompt.md`](./prompt.md) into Claude Code inside your project. It detects your framework (Vite, Next.js, Astro, SvelteKit, Nuxt, CRA…) and injects the overlay **only in development**, then prints the `projects.json` line to register.
+**3. Let AI install it for you** — copy [`prompt.md`](./prompt.md) into Claude Code inside your project. It's fully self-configuring: it auto-detects the project id and editor URL, detects your framework (Vite, Next.js, Astro, SvelteKit, Nuxt, CRA, Remix, Angular, SolidStart…), injects the overlay **only in development**, and verifies the install against the running editor server before reporting done.
 
 > Tip: tag elements with `data-file="path/to/source"` so Claude knows exactly which file owns them.
 
@@ -241,9 +243,10 @@ dheep-ai-visual-editor/
 ├── server/
 │   ├── index.js       Express server: /task (SSE), /status, /projects, /history, serves overlay
 │   ├── claude.js      Spawns the Claude CLI (stream-json), parses events, resumes sessions
+│   ├── search.js      Pre-search: ranks candidate source files for the clicked element
 │   ├── projects.js    Multi-project registry (projects.json or PROJECT_ROOT fallback)
 │   ├── hotreload.js   One WebSocket server + one chokidar watcher per project
-│   └── utils.js       Prompt builder + tasks.json helpers
+│   └── utils.js       Prompt builder, framework detection + tasks.json helpers
 ├── overlay/
 │   ├── overlay.js     Toggle, hover, click, selector + context collection, hot-reload client
 │   ├── sidebar.js     Docked chat sidebar: messages, streaming, session, element attach
