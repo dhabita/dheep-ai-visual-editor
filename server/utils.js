@@ -64,23 +64,72 @@ export async function listProjectFiles(projectRoot, { maxEntries = 400 } = {}) {
 }
 
 /**
- * Build the full prompt Claude receives, combining the user's task with the
- * collected element context. Kept deliberately explicit and readable.
+ * Detect the project's framework and styling system from package.json and
+ * well-known files. Best-effort — returns a generic label when unknown.
  */
-export function buildPrompt({ prompt, context = {} }, projectRoot) {
-  const { selector, html, css, file, classList } = context;
+export function detectProjectInfo(projectRoot) {
+  const info = { framework: null, styling: null };
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
+    const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+    const hasDir = (d) => fs.existsSync(path.join(projectRoot, d));
+    if (deps.next) info.framework = hasDir('app') || hasDir('src/app') ? 'Next.js (App Router)' : 'Next.js (Pages Router)';
+    else if (deps.nuxt) info.framework = 'Nuxt';
+    else if (deps['@sveltejs/kit']) info.framework = 'SvelteKit';
+    else if (deps.astro) info.framework = 'Astro';
+    else if (deps['@remix-run/react']) info.framework = 'Remix';
+    else if (deps['@angular/core']) info.framework = 'Angular';
+    else if (deps['solid-js']) info.framework = 'Solid';
+    else if (deps['react-scripts']) info.framework = 'Create React App';
+    else if (deps.vite && deps.react) info.framework = 'Vite + React';
+    else if (deps.vite && deps.vue) info.framework = 'Vite + Vue';
+    else if (deps.vite && deps.svelte) info.framework = 'Vite + Svelte';
+    else if (deps.vite) info.framework = 'Vite';
+    else if (deps.react) info.framework = 'React';
+    else if (deps.vue) info.framework = 'Vue';
+    if (deps.tailwindcss) info.styling = 'Tailwind CSS';
+  } catch {
+    // No/unreadable package.json — probably a static site.
+  }
+  if (!info.styling) {
+    for (const f of ['tailwind.config.js', 'tailwind.config.ts', 'tailwind.config.cjs', 'tailwind.config.mjs']) {
+      if (fs.existsSync(path.join(projectRoot, f))) { info.styling = 'Tailwind CSS'; break; }
+    }
+  }
+  if (!info.framework) info.framework = 'static HTML / unknown';
+  return info;
+}
+
+/**
+ * Build the full prompt Claude receives: the user's task, the collected
+ * element context, and (when available) pre-searched candidate files and
+ * detected project type. Kept deliberately explicit and readable.
+ */
+export function buildPrompt({ prompt, context = {}, intel = {} }, projectRoot) {
+  const { selector, html, css, file, classList, text, parents, attrs, sourceHint, framework } = context;
+  const { candidates = [], projectInfo = null, fileSummary = [] } = intel;
   const lines = [];
 
   lines.push('You are editing a live website project.');
   lines.push(`Project root: ${projectRoot}`);
-  if (file) {
-    lines.push(`Best guess for the file to edit: ${file}`);
-    lines.push('(If this guess is wrong, use list_files / read_file to find the right one.)');
+  if (projectInfo?.framework) {
+    lines.push(`Project type: ${projectInfo.framework}${projectInfo.styling ? `, styling: ${projectInfo.styling}` : ''}`);
   }
+  if (file) lines.push(`Page path hint (from the browser URL): ${file}`);
   lines.push('');
   lines.push('--- Clicked element context ---');
   if (selector) lines.push(`CSS selector: ${selector}`);
   if (classList && classList.length) lines.push(`classList: ${classList.join(', ')}`);
+  if (text) lines.push(`Element text: ${text}`);
+  if (parents) lines.push(`Ancestors: ${parents}`);
+  if (attrs && Object.keys(attrs).length) {
+    lines.push('Attributes:');
+    for (const [k, v] of Object.entries(attrs)) lines.push(`  ${k}="${v}"`);
+  }
+  if (framework) lines.push(`Page framework: ${framework}`);
+  if (sourceHint?.file) {
+    lines.push(`Framework dev source: ${sourceHint.file}${sourceHint.line ? `:${sourceHint.line}` : ''}`);
+  }
   if (html) {
     lines.push('Current outerHTML (may be truncated):');
     lines.push(html);
@@ -91,9 +140,23 @@ export function buildPrompt({ prompt, context = {} }, projectRoot) {
   }
   lines.push('--- End context ---');
   lines.push('');
+  if (candidates.length) {
+    lines.push('--- Candidate source files (automatic search — verify before editing) ---');
+    candidates.forEach((c, i) => {
+      lines.push(`${i + 1}. ${c.file}:${c.line}${c.snippet ? ` — ${c.snippet}` : ''}`);
+      lines.push(`   matched: ${c.reason}`);
+    });
+    lines.push('--- End candidates ---');
+    lines.push('');
+  } else if (fileSummary.length) {
+    lines.push('--- Project files (partial) ---');
+    for (const f of fileSummary) lines.push(`  ${f}`);
+    lines.push('--- End files ---');
+    lines.push('');
+  }
   lines.push(`TASK: ${prompt}`);
   lines.push('');
-  lines.push('Find the relevant source, make the edit directly, and save the file now.');
+  lines.push('Start from the highest-ranked candidate file. Verify the element is really there (match its text/classes) before editing. If no candidate matches, search with Grep. Make the edit directly and save the file now.');
 
   return lines.join('\n');
 }
