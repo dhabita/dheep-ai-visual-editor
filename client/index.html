@@ -312,11 +312,12 @@
         const openBtn = origin
           ? `<button class="open" data-origin="${esc(origin)}">Open ↗</button>`
           : `<button class="open" disabled title="Open the project once with the overlay so its port is detected">Open ↗</button>`;
+        const restartBtn = `<button class="restart" data-restart="${esc(id)}" title="Kill + restart this project's dev server">↻ Restart</button>`;
         return `<div class="pcard">
           <div class="id"><span class="d" style="width:8px;height:8px;border-radius:50%;background:var(--ok);display:inline-block"></span> ${esc(id)}</div>
           <div class="path">${esc(p.root)}</div>
           <div class="pstats"><span><b>${hist.length}</b> tasks</span><span><b>${hist.reduce((a,t)=>a+((t.editedFiles||[]).length),0)}</b> edits</span><span>last ${last}</span></div>
-          <div class="pfoot">${portChip}<button class="chat" data-project="${esc(id)}">💬 Chat</button>${openBtn}</div>
+          <div class="pfoot">${portChip}<button class="chat" data-project="${esc(id)}">💬 Chat</button>${openBtn}${restartBtn}</div>
         </div>`;
       }).join('');
     }
@@ -369,14 +370,23 @@
     async function loadPortStatus() {
       try {
         const arr = await (await fetch('/projects/status')).json();
-        arr.forEach(s=>{ const p=state.projects[s.id]; if(p){ if(s.origin) p.origin=s.origin; p.up=s.up; } });
+        arr.forEach(s=>{ const p=state.projects[s.id]; if(p){ if(s.origin) p.origin=s.origin; p.up=s.up; p.dev=s.dev; } });
         renderProjects();
       } catch {}
     }
     // Open a project's running page in a new tab.
-    $('projects').addEventListener('click', (e)=>{
+    $('projects').addEventListener('click', async (e)=>{
       const b = e.target.closest('button.open');
-      if (b && b.dataset.origin) window.open(b.dataset.origin, '_blank', 'noopener');
+      if (b && b.dataset.origin) { window.open(b.dataset.origin, '_blank', 'noopener'); return; }
+      const rb = e.target.closest('button.restart');
+      if (rb && rb.dataset.restart) {
+        rb.disabled = true;
+        try {
+          await fetch('/dev/' + encodeURIComponent(rb.dataset.restart) + '/restart', { method: 'POST' });
+          toast('↻ restarting <span class="mono">' + esc(rb.dataset.restart) + '</span>');
+        } catch {} finally { rb.disabled = false; }
+        return;
+      }
     });
 
     // ---- Live SSE ----
@@ -405,6 +415,13 @@
       es.addEventListener('task:remove', (e)=>{ const {id}=JSON.parse(e.data); state.active.delete(id); renderLive(); renderKpis(); });
       es.addEventListener('reload', (e)=>{ const d=JSON.parse(e.data); toast(`↻ file changed · <span class="mono">${esc(d.project||'')}</span>`); });
       es.addEventListener('project', (e)=>{ const p=JSON.parse(e.data); const had=!!state.projects[p.id]; state.projects[p.id]=Object.assign(state.projects[p.id]||{}, p); renderProjects(); loadPortStatus(); if(!had) toast(`＋ project registered · <span class="mono">${esc(p.id)}</span>`); });
+      es.addEventListener('recovery:start', (e)=>{ const d=JSON.parse(e.data); toast('⏳ recovering <span class="mono">'+esc(d.id)+'</span>…'); });
+      es.addEventListener('recovery:end', (e)=>{
+        const d=JSON.parse(e.data);
+        const ok = d.outcome && d.outcome.indexOf('recovered')===0;
+        toast((ok?'✓ ':'✗ ')+esc(d.id)+' · '+esc(d.outcome));
+      });
+      es.addEventListener('dev:status', ()=>loadPortStatus());
       es.onerror = ()=>{ setConn(false); };
       es.onopen = ()=> setConn(true);
     }
