@@ -9,6 +9,7 @@ import cors from 'cors';
 
 import { runTask, ALLOWED_MODELS, DEFAULT_MODEL } from './claude.js';
 import { startHotReload } from './hotreload.js';
+import { createDevManager, probeHttpStatus } from './devservers.js';
 import { readTasks, appendTask } from './utils.js';
 import {
   loadProjects,
@@ -87,6 +88,14 @@ const hot = startHotReload(
     }
   }
 );
+
+// Dev-server manager: owns each project's dev process so we can auto-recover
+// a 500 by restarting (and, if needed, asking Claude to fix the code).
+const devManager = createDevManager({ projects, runTask, broadcast: dashBroadcast });
+
+// Report throttle: ignore repeat reports of the same project/url/status burst.
+const reportThrottle = new Map(); // key → timestamp
+const REPORT_THROTTLE_MS = 15000;
 
 /** TCP-probe an origin (http://host:port) to see if its dev server is up. */
 function probePort(origin, timeout = 500) {
@@ -196,6 +205,7 @@ app.get('/projects/status', async (req, res) => {
       id: p.id,
       origin: p.origin || null,
       up: p.origin ? await probePort(p.origin) : false,
+      dev: devManager.status(p.id),
     }))
   );
   res.json(out);
@@ -217,6 +227,35 @@ app.post('/register', (req, res) => {
   }
   const entry = registerProject(id, root);
   res.json({ ok: true, id: entry.id, root: entry.root });
+});
+
+// Manual dev-server control (used by the dashboard).
+app.post('/dev/:id/start', async (req, res) => {
+  try { res.json(await devManager.start(req.params.id, { port: req.body?.port })); }
+  catch (err) { res.status(400).json({ error: err.message }); }
+});
+app.post('/dev/:id/restart', async (req, res) => {
+  try { res.json(await devManager.restart(req.params.id)); }
+  catch (err) { res.status(400).json({ error: err.message }); }
+});
+app.post('/dev/:id/stop', async (req, res) => {
+  try { await devManager.stop(req.params.id); res.json(devManager.status(req.params.id)); }
+  catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+// Overlay-reported error (fetch/navigation ≥500) — trigger recovery, throttled.
+app.post('/report-error', async (req, res) => {
+  const { projectId, url, status } = req.body || {};
+  if (!projectId || typeof status !== 'number') {
+    res.status(400).json({ error: 'projectId and numeric status are required.' });
+    return;
+  }
+  const key = `${projectId}|${url || ''}|${status}`;
+  const now = Date.now();
+  if (now - (reportThrottle.get(key) || 0) < REPORT_THROTTLE_MS) { res.json({ ok: true, throttled: true }); return; }
+  reportThrottle.set(key, now);
+  res.json({ ok: true });
+  if (status >= 500) devManager.recover(projectId, { url }).catch(() => {});
 });
 
 // ---------------------------------------------------------------------------
@@ -350,6 +389,14 @@ app.post('/task', async (req, res) => {
 
     emit('done', { summary, editedFiles, sessionId: newSession, usage });
 
+    // After an edit, give HMR a moment then check the project isn't 500ing.
+    if (project.origin) {
+      setTimeout(async () => {
+        const st = await probeHttpStatus(project.origin);
+        if (st !== null && st >= 500) devManager.recover(project.id, { url: project.origin }).catch(() => {});
+      }, 1500);
+    }
+
     // Update dashboard task + cumulative stats.
     task.status = 'done';
     task.endedAt = Date.now();
@@ -410,6 +457,10 @@ app.get('/events', (req, res) => {
 
 // Optional dashboard.
 app.use('/', express.static(CLIENT_DIR));
+
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.on(sig, () => { devManager.shutdownAll(); process.exit(0); });
+}
 
 app.listen(SERVER_PORT, () => {
   console.log(`\n  AI Visual Editor`);
