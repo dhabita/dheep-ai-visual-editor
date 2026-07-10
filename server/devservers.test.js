@@ -4,11 +4,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import http from 'node:http';
+
 import {
   detectPackageManager,
   detectStack,
   buildDevCommand,
   getFreePort,
+  probeHttpStatus,
 } from './devservers.js';
 
 function tmpProject(files) {
@@ -60,4 +63,18 @@ test('getFreePort returns a usable port number', async () => {
   const p = await getFreePort();
   assert.equal(typeof p, 'number');
   assert.ok(p > 0 && p < 65536);
+});
+
+test('probeHttpStatus returns the status code of a reachable server', async () => {
+  const server = http.createServer((req, res) => { res.statusCode = 500; res.end('boom'); });
+  await new Promise((r) => server.listen(0, r));
+  const { port } = server.address();
+  const status = await probeHttpStatus(`http://localhost:${port}/`);
+  assert.equal(status, 500);
+  server.close();
+});
+
+test('probeHttpStatus returns null when nothing is listening', async () => {
+  const status = await probeHttpStatus('http://localhost:1/', 300);
+  assert.equal(status, null);
 });

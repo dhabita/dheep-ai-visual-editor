@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
+import http from 'node:http';
+import https from 'node:https';
 
 /** Choose a package manager from the project's lockfile (npm is the default). */
 export function detectPackageManager(root) {
@@ -47,5 +49,27 @@ export function getFreePort() {
       const { port } = srv.address();
       srv.close(() => resolve(port));
     });
+  });
+}
+
+/**
+ * GET a URL and resolve its HTTP status code. Resolves null on any network
+ * error or timeout. We only need the status line, so we destroy the socket as
+ * soon as headers arrive.
+ */
+export function probeHttpStatus(url, timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    let mod;
+    try {
+      mod = new URL(url).protocol === 'https:' ? https : http;
+    } catch {
+      return resolve(null);
+    }
+    const req = mod.get(url, (res) => {
+      resolve(res.statusCode || null);
+      res.destroy();
+    });
+    req.setTimeout(timeoutMs, () => { req.destroy(); resolve(null); });
+    req.on('error', () => resolve(null));
   });
 }
